@@ -607,6 +607,49 @@ body {
   text-decoration: underline;
 }
 
+.footer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.model-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.toggle-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.model-btn {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  padding: 0.3rem 0.6rem;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.model-btn:hover {
+  border-color: var(--jay);
+  color: var(--jay);
+}
+
+.model-btn.active {
+  border-color: var(--jay);
+  color: var(--jay);
+  background: color-mix(in srgb, var(--jay) 15%, var(--bg-card));
+}
+
 /* Skeleton */
 .skeleton {
   background: linear-gradient(

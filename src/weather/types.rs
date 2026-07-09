@@ -29,11 +29,14 @@ pub struct DailyBlock {
 pub struct HourlyBlock {
     pub time: Vec<String>,
     pub precipitation: Vec<Option<f64>>,
-    /// GFS soil layers (shallow cm depths used by gfs_seamless).
     #[serde(default)]
     pub soil_moisture_0_to_10cm: Vec<Option<f64>>,
     #[serde(default)]
     pub soil_moisture_10_to_40cm: Vec<Option<f64>>,
+    #[serde(default)]
+    pub soil_moisture_0_to_7cm: Vec<Option<f64>>,
+    #[serde(default)]
+    pub soil_moisture_7_to_28cm: Vec<Option<f64>>,
 }
 
 /// One calendar day of inputs used by the scorer.
@@ -91,11 +94,16 @@ impl ForecastResponse {
             }
             let s0 = hourly.soil_moisture_0_to_10cm.get(i).and_then(|v| *v);
             let s1 = hourly.soil_moisture_10_to_40cm.get(i).and_then(|v| *v);
-            let val = match (s0, s1) {
-                (Some(a), Some(b)) => (a * 0.65) + (b * 0.35),
-                (Some(a), None) => a,
-                (None, Some(b)) => b,
-                (None, None) => continue,
+            let e0 = hourly.soil_moisture_0_to_7cm.get(i).and_then(|v| *v);
+            let e1 = hourly.soil_moisture_7_to_28cm.get(i).and_then(|v| *v);
+            let val = match (s0, s1, e0, e1) {
+                (Some(a), Some(b), _, _) => (a * 0.65) + (b * 0.35),
+                (Some(a), None, _, _) => a,
+                (None, Some(b), _, _) => b,
+                (None, None, Some(a), Some(b)) => (a * 0.65) + (b * 0.35),
+                (None, None, Some(a), None) => a,
+                (None, None, None, Some(b)) => b,
+                (None, None, None, None) => continue,
             };
             sum += val;
             count += 1;

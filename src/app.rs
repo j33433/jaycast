@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::score::{score_color, score_days, DayForecast, Params};
-use crate::weather::{self, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS, WEATHER_SOURCE_LABEL};
+use crate::weather::{self, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS, WeatherModel};
 
 #[derive(Clone)]
 enum LoadState {
@@ -18,17 +18,18 @@ pub fn App() -> impl IntoView {
     let selected = RwSignal::new(Option::<NaiveDate>::None);
     let view_start = RwSignal::new(0usize);
     let refreshed_at = RwSignal::new(String::new());
+    let model = RwSignal::new(weather::load_model_pref());
 
     let load = move || {
+        let m = model.get_untracked();
         state.set(LoadState::Loading);
         spawn_local(async move {
-            match weather::fetch_forecast().await {
+            match weather::fetch_forecast(m).await {
                 Ok(resp) => {
                     let days = resp.days();
                     let today = Local::now().date_naive();
                     let scored = score_days(&days, today, &Params::default());
 
-                    // Default window starts at today (or last day if all past).
                     let today_idx = scored
                         .iter()
                         .position(|d| d.is_today)
@@ -62,6 +63,16 @@ pub fn App() -> impl IntoView {
         load();
     });
 
+    let switch_model = move |new_model: WeatherModel| {
+        if model.get_untracked() == new_model {
+            return;
+        }
+        weather::save_model_pref(new_model);
+        model.set(new_model);
+        selected.set(None);
+        load();
+    };
+
     view! {
         <div id="app">
             <header class="header">
@@ -87,7 +98,7 @@ pub fn App() -> impl IntoView {
                 LoadState::Loading => view! { <LoadingView /> }.into_any(),
                 LoadState::Error(msg) => view! {
                     <ErrorView message=msg on_retry=Callback::new(move |_| {
-                        weather::clear_cache();
+                        weather::clear_cache(model.get_untracked());
                         load();
                     }) />
                 }.into_any(),
@@ -97,10 +108,8 @@ pub fn App() -> impl IntoView {
                         selected=selected
                         view_start=view_start
                         refreshed_at=refreshed_at
-                        on_refresh=Callback::new(move |_| {
-                            weather::clear_cache();
-                            load();
-                        })
+                        model=model
+                        on_switch=Callback::new(move |m| switch_model(m))
                     />
                 }.into_any(),
             }}
@@ -138,7 +147,8 @@ fn ReadyView(
     selected: RwSignal<Option<NaiveDate>>,
     view_start: RwSignal<usize>,
     refreshed_at: RwSignal<String>,
-    on_refresh: Callback<()>,
+    model: RwSignal<WeatherModel>,
+    on_switch: Callback<WeatherModel>,
 ) -> impl IntoView {
     let days_hero = days.clone();
     let days_nav = days.clone();
@@ -149,40 +159,57 @@ fn ReadyView(
         <TimelineNav days=days_nav view_start=view_start selected=selected />
         <Timeline days=days_list view_start=view_start selected=selected />
         <footer class="footer">
+            <div class="footer-controls">
+                <div class="model-toggle">
+                    <span class="toggle-label">"Model: "</span>
+                    <button
+                        type="button"
+                        class=move || {
+                            if model.get() == WeatherModel::GfsSeamless {
+                                "model-btn active"
+                            } else {
+                                "model-btn"
+                            }
+                        }
+                        on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
+                    >
+                        "GFS"
+                    </button>
+                    <button
+                        type="button"
+                        class=move || {
+                            if model.get() == WeatherModel::Ecmwf {
+                                "model-btn active"
+                            } else {
+                                "model-btn"
+                            }
+                        }
+                        on:click=move |_| on_switch.run(WeatherModel::Ecmwf)
+                    >
+                        "ECMWF"
+                    </button>
+                </div>
+            </div>
             <p>
-                "Rideability is a heuristic for sandy dune trails that pack firm after rain. "
-                "Stars blend prior rainfall, dry-out timing, ride-day wetness, and comfort weather. "
-                "Scroll back to check scores against days you rode. "
+                "Heuristic for sandy dune trails that pack firm after rain. "
                 "Not trail status - ride at your own judgment."
             </p>
             <p>
-                "Weather: "
-                {WEATHER_SOURCE_LABEL}
-                " · precip in inches · 30-day archive + 10-day forecast · "
-                <a href="https://open-meteo.com/en/docs/gfs-api" target="_blank" rel="noopener">
-                    "docs"
+                {move || model.get().label()}
+                " via "
+                <a href="https://open-meteo.com/" target="_blank" rel="noopener">
+                    "Open-Meteo"
                 </a>
+                " · "
+                <a href="https://github.com/j33433/jaycast" target="_blank" rel="noopener">
+                    "GitHub"
+                </a>
+                " · v0.1.0 · "
+                <a href="mailto:upload.bike@gmail.com">"upload.bike@gmail.com"</a>
                 " · "
                 <a href="LICENSE" target="_blank" rel="noopener">
                     "GPL-3.0"
                 </a>
-            </p>
-            <p>
-                <a href="https://github.com/j33433/jaycast" target="_blank" rel="noopener">
-                    "github.com/j33433/jaycast"
-                </a>
-                " · v0.1.0 · "
-                <a href="mailto:upload.bike@gmail.com">"upload.bike@gmail.com"</a>
-            </p>
-            <p>
-                <button
-                    type="button"
-                    class="btn"
-                    style="margin-top:0.5rem;font-size:0.8rem;padding:0.35rem 0.8rem;"
-                    on:click=move |_| on_refresh.run(())
-                >
-                    "Refresh weather"
-                </button>
             </p>
         </footer>
     }
@@ -391,7 +418,6 @@ fn Timeline(
 }
 
 fn day_detail_view(d: DayForecast) -> impl IntoView {
-    // Bubble already shows date, stars, precip, and temps; keep only extra context here.
     let score_line = format!(
         "score {:.0}% · {:.0}% rain chance",
         d.score * 100.0,
