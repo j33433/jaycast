@@ -14,12 +14,14 @@ pub const TIMEZONE: &str = "America/New_York";
 pub const LOCATION_NAME: &str = "Camp Murphy MTB Trails";
 pub const LOCATION_SUB: &str = "Jonathan Dickinson State Park, FL";
 
-/// Past days of history for packing model.
-pub const PAST_DAYS: u32 = 7;
+/// Past days of history (pack model lookback + browseable archive).
+pub const PAST_DAYS: u32 = 30;
 /// Forecast days to score and display.
 pub const FORECAST_DAYS: u32 = 10;
+/// Days shown in the timeline window at once.
+pub const VIEW_DAYS: usize = 10;
 
-const CACHE_KEY: &str = "jaycast:open-meteo:v1";
+const CACHE_KEY: &str = "jaycast:open-meteo:v2";
 const CACHE_TTL_SECS: i64 = 90 * 60; // 1.5 hours
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

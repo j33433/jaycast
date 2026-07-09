@@ -23,6 +23,9 @@ pub struct DayForecast {
     pub score: f64,
     pub factors: Vec<Factor>,
     pub best: bool,
+    /// True when the day is strictly before local today (observed archive).
+    pub is_past: bool,
+    pub is_today: bool,
     pub precip_in: f64,
     pub temp_max_f: f64,
     pub temp_min_f: f64,
@@ -30,22 +33,19 @@ pub struct DayForecast {
     pub blurb: String,
 }
 
-/// Score every day in the series. Only days on/after `today` are marked for display
-/// ranking; history is used for antecedent rain.
+/// Score every day in the series. Antecedent rain uses earlier days in `days`.
+/// `best` is set only among today and future days.
 pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec<DayForecast> {
     let mut forecasts = Vec::new();
 
-    for (idx, day) in days.iter().enumerate() {
-        if day.date < today {
-            continue;
-        }
-        let fc = score_one(days, idx, today, params);
-        forecasts.push(fc);
+    for (idx, _day) in days.iter().enumerate() {
+        forecasts.push(score_one(days, idx, today, params));
     }
 
     if let Some(best_idx) = forecasts
         .iter()
         .enumerate()
+        .filter(|(_, d)| !d.is_past)
         .max_by(|(_, a), (_, b)| {
             a.score
                 .partial_cmp(&b.score)
@@ -104,6 +104,8 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
         score,
         factors,
         best: false,
+        is_past: day.date < today,
+        is_today: day.date == today,
         precip_in: day.precip_in,
         temp_max_f: day.temp_max_f,
         temp_min_f: day.temp_min_f,
@@ -331,6 +333,18 @@ fn weather_quality(day: &DayWeather, p: &Params) -> (f64, Vec<Factor>) {
 }
 
 fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
+    if date < today {
+        return (
+            1.0,
+            Factor {
+                name: "Data confidence",
+                note: "observed weather (archive)".into(),
+                contribution: 1.0,
+                quality: 1.0,
+            },
+        );
+    }
+
     let days_out = (date - today).num_days().max(0) as f64;
     // Full confidence today–day 3, then taper to ~0.45 by day 10.
     let q = if days_out <= 3.0 {
@@ -339,12 +353,14 @@ fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
         lerp(1.0, 0.45, ((days_out - 3.0) / 7.0).clamp(0.0, 1.0))
     };
 
-    let note = if days_out <= 1.0 {
+    let note = if days_out == 0.0 {
+        "today (near-term forecast)".into()
+    } else if days_out <= 1.0 {
         "near-term forecast".into()
     } else if days_out <= 4.0 {
-        format!("+{days_out:.0} days out — solid confidence")
+        format!("+{days_out:.0} days out - solid confidence")
     } else {
-        format!("+{days_out:.0} days out — lower confidence")
+        format!("+{days_out:.0} days out - lower confidence")
     };
 
     (
@@ -448,6 +464,9 @@ mod tests {
         ];
         let today = NaiveDate::from_ymd_opt(2026, 7, 3).unwrap();
         let scored = score_days(&days, today, &Params::default());
+        assert_eq!(scored.len(), 4, "scores past and future days");
+        assert!(scored[0].is_past);
+        assert!(scored[2].is_today);
         let d3 = scored.iter().find(|d| d.date == today).unwrap();
         assert!(
             d3.stars >= 4,
@@ -455,6 +474,11 @@ mod tests {
             d3.stars,
             d3.score
         );
+        assert!(
+            scored.iter().filter(|d| d.best).count() == 1,
+            "exactly one best among non-past"
+        );
+        assert!(!scored[0].best && !scored[1].best, "past days are not best");
     }
 
     #[test]

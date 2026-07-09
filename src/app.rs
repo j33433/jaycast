@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::score::{score_days, DayForecast, Params};
-use crate::weather::{self, LOCATION_NAME, LOCATION_SUB};
+use crate::weather::{self, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS};
 
 #[derive(Clone)]
 enum LoadState {
@@ -16,6 +16,7 @@ enum LoadState {
 pub fn App() -> impl IntoView {
     let state = RwSignal::new(LoadState::Loading);
     let selected = RwSignal::new(Option::<NaiveDate>::None);
+    let view_start = RwSignal::new(0usize);
     let refreshed_at = RwSignal::new(String::new());
 
     let load = move || {
@@ -26,14 +27,29 @@ pub fn App() -> impl IntoView {
                     let days = resp.days();
                     let today = Local::now().date_naive();
                     let scored = score_days(&days, today, &Params::default());
-                    if selected.get_untracked().is_none() {
+
+                    // Default window starts at today (or last day if all past).
+                    let today_idx = scored
+                        .iter()
+                        .position(|d| d.is_today)
+                        .or_else(|| scored.iter().position(|d| !d.is_past))
+                        .unwrap_or(0);
+                    view_start.set(today_idx);
+
+                    if selected.get_untracked().is_none()
+                        || !scored
+                            .iter()
+                            .any(|d| Some(d.date) == selected.get_untracked())
+                    {
                         let pick = scored
                             .iter()
                             .find(|d| d.best)
+                            .or_else(|| scored.get(today_idx))
                             .or_else(|| scored.first())
                             .map(|d| d.date);
                         selected.set(pick);
                     }
+
                     refreshed_at.set(Local::now().format("%-I:%M %p").to_string());
                     state.set(LoadState::Ready(scored));
                 }
@@ -56,7 +72,6 @@ pub fn App() -> impl IntoView {
                         aria-hidden="true"
                         focusable="false"
                     >
-                        // Stylized Florida scrub jay: blue body, sand belly arc
                         <ellipse cx="20" cy="22" rx="12" ry="9" fill="currentColor" opacity="0.92"/>
                         <ellipse cx="20" cy="24" rx="9" ry="6" fill="var(--sand)" opacity="0.85"/>
                         <path
@@ -101,6 +116,7 @@ pub fn App() -> impl IntoView {
                     <ReadyView
                         days=days
                         selected=selected
+                        view_start=view_start
                         on_refresh=Callback::new(move |_| {
                             weather::clear_cache();
                             load();
@@ -140,21 +156,24 @@ fn ErrorView(message: String, on_retry: Callback<()>) -> impl IntoView {
 fn ReadyView(
     days: Vec<DayForecast>,
     selected: RwSignal<Option<NaiveDate>>,
+    view_start: RwSignal<usize>,
     on_refresh: Callback<()>,
 ) -> impl IntoView {
     let days_hero = days.clone();
+    let days_nav = days.clone();
     let days_list = days.clone();
     let days_detail = days;
 
     view! {
         <Hero days=days_hero selected=selected />
-        <p class="section-title">"Next 10 days"</p>
-        <Timeline days=days_list selected=selected />
+        <TimelineNav days=days_nav view_start=view_start selected=selected />
+        <Timeline days=days_list view_start=view_start selected=selected />
         <DayDetail days=days_detail selected=selected />
         <footer class="footer">
             <p>
                 "Rideability is a heuristic for sandy dune trails that pack firm after rain. "
                 "Stars blend prior rainfall, dry-out timing, ride-day wetness, and comfort weather. "
+                "Scroll back to check scores against days you rode. "
                 "Not trail status - ride at your own judgment."
             </p>
             <p>
@@ -162,7 +181,7 @@ fn ReadyView(
                 <a href="https://open-meteo.com/" target="_blank" rel="noopener">
                     "Open-Meteo"
                 </a>
-                " · precip in inches · "
+                " · precip in inches · 30-day archive + 10-day forecast · "
                 <a href="LICENSE" target="_blank" rel="noopener">
                     "GPL-3.0"
                 </a>
@@ -187,7 +206,7 @@ fn Hero(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> impl I
 
     view! {
         <section class="hero">
-            <p class="label">"Best ride window"</p>
+            <p class="label">"Best ride window (today onward)"</p>
             {match best {
                 Some(d) => {
                     let date = d.date;
@@ -220,52 +239,145 @@ fn Hero(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> impl I
 }
 
 #[component]
-fn Timeline(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> impl IntoView {
+fn TimelineNav(
+    days: Vec<DayForecast>,
+    view_start: RwSignal<usize>,
+    selected: RwSignal<Option<NaiveDate>>,
+) -> impl IntoView {
+    let n = days.len();
+    let today_idx = days.iter().position(|d| d.is_today).unwrap_or(0);
+    let max_start = n.saturating_sub(VIEW_DAYS);
+
+    let range_label = {
+        let days = days.clone();
+        move || {
+            let start = view_start.get().min(max_start);
+            let end = (start + VIEW_DAYS).min(n).saturating_sub(1);
+            match (days.get(start), days.get(end)) {
+                (Some(a), Some(_)) if start == end => format_short(a.date),
+                (Some(a), Some(b)) => format!("{} - {}", format_short(a.date), format_short(b.date)),
+                _ => "No days".into(),
+            }
+        }
+    };
+
+    let step = VIEW_DAYS.saturating_sub(2).max(1);
+
+    view! {
+        <div class="timeline-nav">
+            <button
+                type="button"
+                class="nav-btn"
+                prop:disabled=move || { view_start.get() == 0 }
+                on:click=move |_| {
+                    let s = view_start.get();
+                    view_start.set(s.saturating_sub(step));
+                }
+            >
+                "Older"
+            </button>
+            <div class="nav-mid">
+                <span class="nav-range">{range_label}</span>
+                <button
+                    type="button"
+                    class="nav-today"
+                    on:click=move |_| {
+                        view_start.set(today_idx.min(max_start));
+                        if let Some(d) = days.get(today_idx) {
+                            selected.set(Some(d.date));
+                        }
+                    }
+                >
+                    "Today"
+                </button>
+            </div>
+            <button
+                type="button"
+                class="nav-btn"
+                prop:disabled=move || { view_start.get() >= max_start }
+                on:click=move |_| {
+                    let s = view_start.get();
+                    view_start.set((s + step).min(max_start));
+                }
+            >
+                "Newer"
+            </button>
+        </div>
+    }
+}
+
+#[component]
+fn Timeline(
+    days: Vec<DayForecast>,
+    view_start: RwSignal<usize>,
+    selected: RwSignal<Option<NaiveDate>>,
+) -> impl IntoView {
     view! {
         <div class="timeline" role="list">
-            {days
-                .into_iter()
-                .map(|d| {
-                    let date = d.date;
-                    let is_best = d.best;
-                    let stars = stars_str(d.stars);
-                    let blurb = d.blurb.clone();
-                    let precip = format!("{:.2}\"", d.precip_in);
-                    let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
-                    let date_s = format_short(date);
-                    let dow = format_dow(date);
-                    view! {
-                        <button
-                            type="button"
-                            class=move || {
-                                let mut c = String::from("day-card");
-                                if is_best {
-                                    c.push_str(" best");
+            {move || {
+                let n = days.len();
+                let max_start = n.saturating_sub(VIEW_DAYS);
+                let start = view_start.get().min(max_start);
+                let end = (start + VIEW_DAYS).min(n);
+                days[start..end]
+                    .iter()
+                    .cloned()
+                    .map(|d| {
+                        let date = d.date;
+                        let is_best = d.best;
+                        let is_past = d.is_past;
+                        let is_today = d.is_today;
+                        let stars = stars_str(d.stars);
+                        let blurb = d.blurb.clone();
+                        let precip = format!("{:.2}\"", d.precip_in);
+                        let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
+                        let date_s = format_short(date);
+                        let dow = if is_today {
+                            "Today".to_string()
+                        } else if is_past {
+                            format!("{} · past", format_dow(date))
+                        } else {
+                            format_dow(date)
+                        };
+                        view! {
+                            <button
+                                type="button"
+                                class=move || {
+                                    let mut c = String::from("day-card");
+                                    if is_best {
+                                        c.push_str(" best");
+                                    }
+                                    if is_past {
+                                        c.push_str(" past");
+                                    }
+                                    if is_today {
+                                        c.push_str(" today");
+                                    }
+                                    if selected.get() == Some(date) {
+                                        c.push_str(" selected");
+                                    }
+                                    c
                                 }
-                                if selected.get() == Some(date) {
-                                    c.push_str(" selected");
-                                }
-                                c
-                            }
-                            role="listitem"
-                            on:click=move |_| selected.set(Some(date))
-                        >
-                            <div class="date">
-                                {date_s}
-                                <span class="dow">{dow}</span>
-                            </div>
-                            <div class="mid">
-                                <div class="stars-sm">{stars}</div>
-                                <div class="blurb">{blurb}</div>
-                            </div>
-                            <div class="precip">
-                                {precip}
-                                <span class="temp">{temp}</span>
-                            </div>
-                        </button>
-                    }
-                })
-                .collect_view()}
+                                role="listitem"
+                                on:click=move |_| selected.set(Some(date))
+                            >
+                                <div class="date">
+                                    {date_s}
+                                    <span class="dow">{dow}</span>
+                                </div>
+                                <div class="mid">
+                                    <div class="stars-sm">{stars}</div>
+                                    <div class="blurb">{blurb}</div>
+                                </div>
+                                <div class="precip">
+                                    {precip}
+                                    <span class="temp">{temp}</span>
+                                </div>
+                            </button>
+                        }
+                    })
+                    .collect_view()
+            }}
         </div>
     }
 }
@@ -279,11 +391,16 @@ fn DayDetail(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> i
             match day {
                 None => view! { <div></div> }.into_any(),
                 Some(d) => {
-                    let title = format!(
-                        "{}{}",
-                        format_long(d.date),
-                        if d.best { " · best" } else { "" }
-                    );
+                    let badge = if d.best {
+                        " · best"
+                    } else if d.is_today {
+                        " · today"
+                    } else if d.is_past {
+                        " · past"
+                    } else {
+                        ""
+                    };
+                    let title = format!("{}{}", format_long(d.date), badge);
                     let score_line = format!(
                         "{} · score {:.0}% · {:.2}\" rain · {:.0}% chance",
                         stars_str(d.stars),

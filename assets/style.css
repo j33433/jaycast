@@ -226,13 +226,59 @@ body {
   line-height: 1;
 }
 
-/* Section titles */
-.section-title {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+/* Timeline nav (scroll history) */
+.timeline-nav {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.nav-btn,
+.nav-today {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  padding: 0.4rem 0.75rem;
+}
+
+.nav-btn:hover:not(:disabled),
+.nav-today:hover {
+  border-color: var(--jay);
+  color: var(--jay);
+}
+
+.nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.nav-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.nav-range {
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--sand);
-  margin: 0 0 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-today {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.55rem;
+  color: var(--jay);
+  border-color: color-mix(in srgb, var(--jay) 40%, var(--border));
 }
 
 /* Timeline */
@@ -274,6 +320,18 @@ body {
 
 .day-card.best {
   box-shadow: inset 3px 0 0 var(--jay);
+}
+
+.day-card.past {
+  opacity: 0.88;
+}
+
+.day-card.past .dow {
+  color: var(--sand);
+}
+
+.day-card.today {
+  border-color: color-mix(in srgb, var(--jay) 45%, var(--border));
 }
 
 .day-card.best.selected {
