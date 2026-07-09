@@ -1,0 +1,6 @@
+# Applies when this file is reachable at https://upload.bike/jaycast/robots.txt
+# Domain-root robots.txt is controlled by the main upload.bike site.
+User-agent: *
+Allow: /jaycast/
+
+Sitemap: https://upload.bike/jaycast/sitemap.xml

@@ -169,7 +169,8 @@ fn ReadyView(
                 <a href="https://github.com/j33433/jaycast" target="_blank" rel="noopener">
                     "github.com/j33433/jaycast"
                 </a>
-                " · v0.1.0"
+                " · v0.1.0 · "
+                <a href="mailto:upload.bike@gmail.com">"upload.bike@gmail.com"</a>
             </p>
             <p>
                 <button
