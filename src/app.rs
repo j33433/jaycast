@@ -49,7 +49,33 @@ pub fn App() -> impl IntoView {
     view! {
         <div id="app">
             <header class="header">
-                <h1>"jay" <span>"cast"</span></h1>
+                <div class="brand">
+                    <svg
+                        class="jay-mark"
+                        viewBox="0 0 40 40"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        // Stylized Florida scrub jay: blue body, sand belly arc
+                        <ellipse cx="20" cy="22" rx="12" ry="9" fill="currentColor" opacity="0.92"/>
+                        <ellipse cx="20" cy="24" rx="9" ry="6" fill="var(--sand)" opacity="0.85"/>
+                        <path
+                            d="M8 18c2-6 8-10 14-9 4 0 8 2 10 6-3-1-6 0-8 2-3 2-6 2-9 1-3-1-5-1-7 0z"
+                            fill="currentColor"
+                        />
+                        <circle cx="26" cy="15" r="1.4" fill="var(--bg)"/>
+                        <path d="M30 16l5 1.5-5 1" fill="var(--sand-hot)"/>
+                        <path
+                            d="M10 26c2 4 6 7 12 7s9-2 11-5c-3 1-7 1-11 0-4-1-8-2-12-2z"
+                            fill="currentColor"
+                            opacity="0.75"
+                        />
+                    </svg>
+                    <div>
+                        <h1>"jay" <span>"cast"</span></h1>
+                        <span class="tagline">"scrub trail pack"</span>
+                    </div>
+                </div>
                 <div class="meta">
                     {move || {
                         let t = refreshed_at.get();
