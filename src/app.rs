@@ -20,8 +20,11 @@ pub fn App() -> impl IntoView {
     let refreshed_at = RwSignal::new(String::new());
     let model = RwSignal::new(weather::load_model_pref());
 
+    let is_first_load = RwSignal::new(true);
+
     let load = move || {
         let m = model.get_untracked();
+        let first = is_first_load.get_untracked();
         state.set(LoadState::Loading);
         spawn_local(async move {
             match weather::fetch_forecast(m).await {
@@ -35,12 +38,15 @@ pub fn App() -> impl IntoView {
                         .position(|d| d.is_today)
                         .or_else(|| scored.iter().position(|d| !d.is_past))
                         .unwrap_or(0);
-                    view_start.set(today_idx);
 
-                    if selected.get_untracked().is_none()
-                        || !scored
-                            .iter()
-                            .any(|d| Some(d.date) == selected.get_untracked())
+                    if first {
+                        view_start.set(today_idx);
+                    }
+
+                    let prev_sel = selected.get_untracked();
+                    if first
+                        || (prev_sel.is_some()
+                            && !scored.iter().any(|d| Some(d.date) == prev_sel))
                     {
                         let pick = scored
                             .iter()
@@ -51,6 +57,7 @@ pub fn App() -> impl IntoView {
                         selected.set(pick);
                     }
 
+                    is_first_load.set(false);
                     refreshed_at.set(Local::now().format("%-I:%M %p").to_string());
                     state.set(LoadState::Ready(scored));
                 }
@@ -69,7 +76,6 @@ pub fn App() -> impl IntoView {
         }
         weather::save_model_pref(new_model);
         model.set(new_model);
-        selected.set(None);
         load();
     };
 
