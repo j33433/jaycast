@@ -2,7 +2,7 @@ use chrono::{Local, NaiveDate};
 use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
-use crate::score::{score_days, DayForecast, Params};
+use crate::score::{score_color, score_days, DayForecast, Params};
 use crate::weather::{self, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS};
 
 #[derive(Clone)]
@@ -165,7 +165,7 @@ fn ReadyView(
     let days_detail = days;
 
     view! {
-        <Hero days=days_hero selected=selected />
+        <Hero days=days_hero />
         <TimelineNav days=days_nav view_start=view_start selected=selected />
         <Timeline days=days_list view_start=view_start selected=selected />
         <DayDetail days=days_detail selected=selected />
@@ -201,7 +201,7 @@ fn ReadyView(
 }
 
 #[component]
-fn Hero(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> impl IntoView {
+fn Hero(days: Vec<DayForecast>) -> impl IntoView {
     let best = days.iter().find(|d| d.best).cloned();
 
     view! {
@@ -209,22 +209,14 @@ fn Hero(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> impl I
             <p class="label">"Best ride window (today onward)"</p>
             {match best {
                 Some(d) => {
-                    let date = d.date;
-                    let name = format_long(date);
+                    let name = format_long(d.date);
                     let stars = stars_str(d.stars);
                     let blurb = d.blurb.clone();
+                    let tint = score_style(d.score);
                     view! {
                         <h2 class="day-name">{name}</h2>
-                        <div class="stars">{stars}</div>
+                        <div class="stars" style=tint>{stars}</div>
                         <p class="why">{blurb}</p>
-                        <button
-                            type="button"
-                            class="btn"
-                            style="margin-top:0.85rem;font-size:0.85rem;"
-                            on:click=move |_| selected.set(Some(date))
-                        >
-                            "See factors"
-                        </button>
                     }
                     .into_any()
                 }
@@ -332,6 +324,7 @@ fn Timeline(
                         let precip = format!("{:.2}\"", d.precip_in);
                         let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
                         let date_s = format_short(date);
+                        let tint = score_style(d.score);
                         let dow = if is_today {
                             "Today".to_string()
                         } else if is_past {
@@ -358,6 +351,7 @@ fn Timeline(
                                     }
                                     c
                                 }
+                                style=tint
                                 role="listitem"
                                 on:click=move |_| selected.set(Some(date))
                             >
@@ -408,8 +402,9 @@ fn DayDetail(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> i
                         d.precip_in,
                         d.precip_prob_max
                     );
+                    let tint = score_style(d.score);
                     view! {
-                        <section class="detail">
+                        <section class="detail" style=tint>
                             <h2>{title}</h2>
                             <p class="score-line">{score_line}</p>
                             <ul class="factors">
@@ -456,9 +451,12 @@ fn DayDetail(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> i
     }
 }
 
-fn stars_str(n: u8) -> String {
-    let n = n.clamp(1, 5) as usize;
-    format!("{}{}", "★".repeat(n), "☆".repeat(5 - n))
+fn stars_str(n: f64) -> String {
+    format!("{:.1} ★", n.clamp(1.0, 5.0))
+}
+
+fn score_style(score: f64) -> String {
+    format!("--score-color: {}", score_color(score))
 }
 
 fn format_long(d: NaiveDate) -> String {

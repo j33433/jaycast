@@ -14,7 +14,7 @@ Sandy trails firm up after sustained rain, then loosen as they dry. Ideal ride d
 2. Dry (or nearly dry) on the day you ride
 3. Comfortable temperature and wind
 
-Each day in a **30-day archive + 10-day forecast** gets a **1–5 star** score plus a factor breakdown (prior rain, pack timing, ride-day wetness, soil moisture, temp, wind, forecast confidence). Use **Older / Today / Newer** to scroll the timeline and verify scores against days you rode. Units are **inches** and °F.
+Each day in a **30-day archive + 10-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown (prior rain, pack timing, ride-day wetness, soil moisture, temp, wind, forecast confidence). Day cards are tinted by score. Use **Older / Today / Newer** to scroll the timeline and verify scores against days you rode. Units are **inches** and °F.
 
 ## Develop
 

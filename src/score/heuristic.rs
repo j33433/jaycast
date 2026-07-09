@@ -19,7 +19,8 @@ pub struct Factor {
 #[derive(Clone, Debug)]
 pub struct DayForecast {
     pub date: NaiveDate,
-    pub stars: u8,
+    /// Rideability in 1.0..=5.0, one decimal place.
+    pub stars: f64,
     pub score: f64,
     pub factors: Vec<Factor>,
     pub best: bool,
@@ -386,18 +387,24 @@ fn hours_since_significant_rain(days: &[DayWeather], idx: usize, threshold: f64)
     None
 }
 
-fn score_to_stars(score: f64) -> u8 {
-    if score >= 0.85 {
-        5
-    } else if score >= 0.70 {
-        4
-    } else if score >= 0.50 {
-        3
-    } else if score >= 0.30 {
-        2
+/// Map continuous score 0..=1 to stars 1.0..=5.0 (one decimal).
+pub fn score_to_stars(score: f64) -> f64 {
+    let s = (1.0 + score.clamp(0.0, 1.0) * 4.0).clamp(1.0, 5.0);
+    (s * 10.0).round() / 10.0
+}
+
+/// CSS color for a day card from score 0..=1 (red → sand → scrub green).
+pub fn score_color(score: f64) -> String {
+    let t = score.clamp(0.0, 1.0);
+    // Hue: ~8 (rust red) → 42 (sand/gold) → 118 (scrub green)
+    let h = if t < 0.5 {
+        8.0 + (t / 0.5) * 34.0
     } else {
-        1
-    }
+        42.0 + ((t - 0.5) / 0.5) * 76.0
+    };
+    let s = 48.0 + t * 12.0;
+    let l = 38.0 + t * 8.0;
+    format!("hsl({h:.0} {s:.0}% {l:.0}%)")
 }
 
 fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor]) -> String {
@@ -469,8 +476,8 @@ mod tests {
         assert!(scored[2].is_today);
         let d3 = scored.iter().find(|d| d.date == today).unwrap();
         assert!(
-            d3.stars >= 4,
-            "expected high stars after rain, got {} (score {:.2})",
+            d3.stars >= 4.0,
+            "expected high stars after rain, got {:.1} (score {:.2})",
             d3.stars,
             d3.score
         );
@@ -491,8 +498,8 @@ mod tests {
         let scored = score_days(&days, today, &Params::default());
         let d = scored.iter().find(|d| d.date == today).unwrap();
         assert!(
-            d.stars <= 3,
-            "dry sand should not be great, got {} (score {:.2})",
+            d.stars <= 3.5,
+            "dry sand should not be great, got {:.1} (score {:.2})",
             d.stars,
             d.score
         );
@@ -508,8 +515,8 @@ mod tests {
         let scored = score_days(&days, today, &Params::default());
         let d = &scored[0];
         assert!(
-            d.stars <= 3,
-            "wet ride day should be mediocre at best, got {} (score {:.2})",
+            d.stars <= 3.5,
+            "wet ride day should be mediocre at best, got {:.1} (score {:.2})",
             d.stars,
             d.score
         );
@@ -517,10 +524,9 @@ mod tests {
 
     #[test]
     fn stars_mapping_boundaries() {
-        assert_eq!(score_to_stars(0.9), 5);
-        assert_eq!(score_to_stars(0.7), 4);
-        assert_eq!(score_to_stars(0.5), 3);
-        assert_eq!(score_to_stars(0.3), 2);
-        assert_eq!(score_to_stars(0.1), 1);
+        assert!((score_to_stars(1.0) - 5.0).abs() < 1e-9);
+        assert!((score_to_stars(0.0) - 1.0).abs() < 1e-9);
+        assert!((score_to_stars(0.875) - 4.5).abs() < 1e-9);
+        assert!((score_to_stars(0.5) - 3.0).abs() < 1e-9);
     }
 }
