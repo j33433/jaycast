@@ -166,6 +166,12 @@ fn ReadyView(
                 </a>
             </p>
             <p>
+                <a href="https://github.com/j33433/jaycast" target="_blank" rel="noopener">
+                    "github.com/j33433/jaycast"
+                </a>
+                " · v0.1.0"
+            </p>
+            <p>
                 <button
                     type="button"
                     class="btn"

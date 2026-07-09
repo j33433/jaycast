@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 description = "Rideability forecasts for sandy dune MTB trails that pack firm after rain"
-repository = "https://github.com/james/jaycast"
+repository = "https://github.com/j33433/jaycast"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

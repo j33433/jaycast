@@ -4,6 +4,8 @@ Rideability forecasts for sandy dune MTB trails that pack firm after rain.
 
 **Camp Murphy MTB Trails** · Jonathan Dickinson State Park, FL
 
+**Live:** [https://upload.bike/jaycast/](https://upload.bike/jaycast/)
+
 Browser-only app (Rust → WASM via Leptos). Weather from [Open-Meteo](https://open-meteo.com/). No API keys, no backend.
 
 ## Idea
