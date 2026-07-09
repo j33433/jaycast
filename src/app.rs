@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::score::{score_color, score_days, DayForecast, Params};
-use crate::weather::{self, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS};
+use crate::weather::{self, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS, WEATHER_SOURCE_LABEL};
 
 #[derive(Clone)]
 enum LoadState {
@@ -157,10 +157,12 @@ fn ReadyView(
             </p>
             <p>
                 "Weather: "
-                <a href="https://open-meteo.com/" target="_blank" rel="noopener">
-                    "Open-Meteo"
-                </a>
+                {WEATHER_SOURCE_LABEL}
                 " · precip in inches · 30-day archive + 10-day forecast · "
+                <a href="https://open-meteo.com/en/docs/gfs-api" target="_blank" rel="noopener">
+                    "docs"
+                </a>
+                " · "
                 <a href="LICENSE" target="_blank" rel="noopener">
                     "GPL-3.0"
                 </a>

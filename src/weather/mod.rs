@@ -21,7 +21,11 @@ pub const FORECAST_DAYS: u32 = 10;
 /// Days shown in the timeline window at once.
 pub const VIEW_DAYS: usize = 10;
 
-const CACHE_KEY: &str = "jaycast:open-meteo:v2";
+/// NOAA seamless stack via Open-Meteo (HRRR short-range + GFS longer range).
+pub const WEATHER_MODEL: &str = "gfs_seamless";
+pub const WEATHER_SOURCE_LABEL: &str = "NOAA GFS seamless (HRRR+GFS) via Open-Meteo";
+
+const CACHE_KEY: &str = "jaycast:open-meteo:v3-gfs-seamless";
 const CACHE_TTL_SECS: i64 = 90 * 60; // 1.5 hours
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -55,16 +59,18 @@ pub async fn fetch_forecast() -> Result<ForecastResponse, String> {
 }
 
 fn build_url() -> String {
+    // /v1/gfs with gfs_seamless pins CONUS NOAA products (HRRR near-term + GFS out).
     format!(
-        "https://api.open-meteo.com/v1/forecast?\
+        "https://api.open-meteo.com/v1/gfs?\
          latitude={LAT}&longitude={LON}\
          &timezone={TIMEZONE}\
          &past_days={PAST_DAYS}&forecast_days={FORECAST_DAYS}\
+         &models={WEATHER_MODEL}\
          &daily=precipitation_sum,rain_sum,precipitation_hours,\
          precipitation_probability_max,temperature_2m_max,temperature_2m_min,\
          apparent_temperature_max,wind_speed_10m_max,wind_gusts_10m_max,\
          weather_code,et0_fao_evapotranspiration\
-         &hourly=precipitation,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm\
+         &hourly=precipitation,soil_moisture_0_to_10cm,soil_moisture_10_to_40cm\
          &temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch"
     )
 }

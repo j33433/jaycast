@@ -8,7 +8,7 @@ Rideability forecasts for sandy dune MTB trails that pack firm after rain.
 
 **Live:** [https://upload.bike/jaycast/](https://upload.bike/jaycast/)
 
-Browser-only app (Rust → WASM via Leptos). Weather from [Open-Meteo](https://open-meteo.com/). No API keys, no backend.
+Browser-only app (Rust → WASM via Leptos). Weather from [Open-Meteo](https://open-meteo.com/) pinned to **NOAA GFS seamless** (HRRR short-range + GFS longer range). No API keys, no backend.
 
 ## Idea
 
@@ -41,7 +41,7 @@ Heuristic weights (see `src/score/params.rs`):
 | Prior rain | Antecedent precip over ~72h; sweet spot ~0.35–3.0 in, ideal ~1.0 in |
 | Pack timing | Best ~24h after a solid rain day; fades over ~5 dry days |
 | Ride-day wetness | Soft penalty for light rain; hard gate if ≥0.4 in that day |
-| Soil moisture | Secondary Open-Meteo soil signal |
+| Soil moisture | Secondary GFS soil signal (0–10 / 10–40 cm) |
 | Temperature / wind | Florida MTB comfort band |
 | Forecast confidence | Tapers for farther days |
 

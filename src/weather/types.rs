@@ -29,8 +29,11 @@ pub struct DailyBlock {
 pub struct HourlyBlock {
     pub time: Vec<String>,
     pub precipitation: Vec<Option<f64>>,
-    pub soil_moisture_0_to_1cm: Vec<Option<f64>>,
-    pub soil_moisture_1_to_3cm: Vec<Option<f64>>,
+    /// GFS soil layers (shallow cm depths used by gfs_seamless).
+    #[serde(default)]
+    pub soil_moisture_0_to_10cm: Vec<Option<f64>>,
+    #[serde(default)]
+    pub soil_moisture_10_to_40cm: Vec<Option<f64>>,
 }
 
 /// One calendar day of inputs used by the scorer.
@@ -86,10 +89,10 @@ impl ForecastResponse {
             if !t.starts_with(date_str) {
                 continue;
             }
-            let s0 = hourly.soil_moisture_0_to_1cm.get(i).and_then(|v| *v);
-            let s1 = hourly.soil_moisture_1_to_3cm.get(i).and_then(|v| *v);
+            let s0 = hourly.soil_moisture_0_to_10cm.get(i).and_then(|v| *v);
+            let s1 = hourly.soil_moisture_10_to_40cm.get(i).and_then(|v| *v);
             let val = match (s0, s1) {
-                (Some(a), Some(b)) => (a + b) / 2.0,
+                (Some(a), Some(b)) => (a * 0.65) + (b * 0.35),
                 (Some(a), None) => a,
                 (None, Some(b)) => b,
                 (None, None) => continue,
