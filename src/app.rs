@@ -65,43 +65,32 @@ pub fn App() -> impl IntoView {
     view! {
         <div id="app">
             <header class="header">
-                <div class="brand">
-                    <svg
-                        class="jay-mark"
-                        viewBox="0 0 40 40"
-                        aria-hidden="true"
-                        focusable="false"
-                    >
-                        <ellipse cx="20" cy="22" rx="12" ry="9" fill="currentColor" opacity="0.92"/>
-                        <ellipse cx="20" cy="24" rx="9" ry="6" fill="var(--sand)" opacity="0.85"/>
-                        <path
-                            d="M8 18c2-6 8-10 14-9 4 0 8 2 10 6-3-1-6 0-8 2-3 2-6 2-9 1-3-1-5-1-7 0z"
-                            fill="currentColor"
-                        />
-                        <circle cx="26" cy="15" r="1.4" fill="var(--bg)"/>
-                        <path d="M30 16l5 1.5-5 1" fill="var(--sand-hot)"/>
-                        <path
-                            d="M10 26c2 4 6 7 12 7s9-2 11-5c-3 1-7 1-11 0-4-1-8-2-12-2z"
-                            fill="currentColor"
-                            opacity="0.75"
-                        />
-                    </svg>
-                    <div>
-                        <h1>"jay" <span>"cast"</span></h1>
-                        <span class="tagline">"scrub trail pack"</span>
-                    </div>
+                <img
+                    class="jay-mark"
+                    src="/jaycast/jaycast-icon.png"
+                    width="106"
+                    height="120"
+                    alt=""
+                />
+                <div class="header-text">
+                    <h1>"jay" <span>"cast"</span></h1>
+                    <span class="tagline">"scrub trail pack"</span>
+                    <p class="location">
+                        {LOCATION_NAME}
+                        <br/>
+                        {LOCATION_SUB}
+                    </p>
+                    <p class="meta">
+                        {move || {
+                            let t = refreshed_at.get();
+                            if t.is_empty() {
+                                "loading...".to_string()
+                            } else {
+                                format!("updated {t}")
+                            }
+                        }}
+                    </p>
                 </div>
-                <div class="meta">
-                    {move || {
-                        let t = refreshed_at.get();
-                        if t.is_empty() {
-                            "loading...".to_string()
-                        } else {
-                            format!("updated {t}")
-                        }
-                    }}
-                </div>
-                <p class="location">{LOCATION_NAME} <br/> {LOCATION_SUB}</p>
             </header>
 
             {move || match state.get() {
@@ -319,6 +308,7 @@ fn Timeline(
                         let is_best = d.best;
                         let is_past = d.is_past;
                         let is_today = d.is_today;
+                        let is_weekend = is_weekend(date);
                         let stars = stars_str(d.stars);
                         let blurb = d.blurb.clone();
                         let precip = format!("{:.2}\"", d.precip_in);
@@ -345,6 +335,9 @@ fn Timeline(
                                     }
                                     if is_today {
                                         c.push_str(" today");
+                                    }
+                                    if is_weekend {
+                                        c.push_str(" weekend");
                                     }
                                     if selected.get() == Some(date) {
                                         c.push_str(" selected");
@@ -469,4 +462,9 @@ fn format_short(d: NaiveDate) -> String {
 
 fn format_dow(d: NaiveDate) -> String {
     d.format("%a").to_string()
+}
+
+fn is_weekend(d: NaiveDate) -> bool {
+    use chrono::Datelike;
+    matches!(d.weekday(), chrono::Weekday::Sat | chrono::Weekday::Sun)
 }

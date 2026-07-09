@@ -105,64 +105,69 @@ body {
   padding: 1.25rem 1rem 3rem;
 }
 
-/* Header */
+/* Header: icon left full-scale, all copy right-aligned */
 .header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem 1rem;
+  gap: 1rem 1.25rem;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border);
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
 .jay-mark {
   flex-shrink: 0;
-  width: 2.25rem;
-  height: 2.25rem;
-  color: var(--jay);
+  width: 106px;
+  height: 120px;
+  border-radius: 0;
+  object-fit: contain;
+  display: block;
+}
+
+.header-text {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .header h1 {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  font-size: 2.15rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 
 .header h1 span {
   color: var(--jay);
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .header .tagline {
   display: block;
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--sand);
-  margin-top: 0.15rem;
-}
-
-.header .meta {
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  margin-top: 0.3rem;
 }
 
 .header .location {
-  width: 100%;
+  margin: 0.65rem 0 0;
   font-size: 0.9rem;
   color: var(--text-muted);
-  margin: 0.15rem 0 0;
+  line-height: 1.4;
+}
+
+.header .meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 /* Hero */
@@ -344,6 +349,28 @@ body {
 
 .day-card.today {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--jay) 30%, transparent);
+}
+
+/* Weekends stand out for ride planning */
+.day-card.weekend {
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--sand-hot) 70%, var(--score-color));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sand) 55%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sand-hot) 25%, transparent);
+}
+
+.day-card.weekend.selected {
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--sand-hot) 50%, var(--score-color));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--sand) 50%, var(--score-color)),
+    inset 0 0 0 1px color-mix(in srgb, var(--score-color) 20%, transparent);
+}
+
+.day-card.weekend .dow {
+  color: var(--sand-hot);
+  font-weight: 650;
 }
 
 .day-card.best.selected {
