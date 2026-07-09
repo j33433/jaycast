@@ -19,6 +19,8 @@ pub fn App() -> impl IntoView {
     let view_start = RwSignal::new(0usize);
     let refreshed_at = RwSignal::new(String::new());
     let model = RwSignal::new(weather::load_model_pref());
+    let grid_lat = RwSignal::new(0.0f64);
+    let grid_lon = RwSignal::new(0.0f64);
 
     let is_first_load = RwSignal::new(true);
 
@@ -29,6 +31,8 @@ pub fn App() -> impl IntoView {
         spawn_local(async move {
             match weather::fetch_forecast(m).await {
                 Ok(resp) => {
+                    grid_lat.set(resp.latitude);
+                    grid_lon.set(resp.longitude);
                     let days = resp.days();
                     let today = Local::now().date_naive();
                     let scored = score_days(&days, today, &Params::default());
@@ -115,6 +119,8 @@ pub fn App() -> impl IntoView {
                         view_start=view_start
                         refreshed_at=refreshed_at
                         model=model
+                        grid_lat=grid_lat
+                        grid_lon=grid_lon
                         on_switch=Callback::new(move |m| switch_model(m))
                     />
                 }.into_any(),
@@ -154,6 +160,8 @@ fn ReadyView(
     view_start: RwSignal<usize>,
     refreshed_at: RwSignal<String>,
     model: RwSignal<WeatherModel>,
+    grid_lat: RwSignal<f64>,
+    grid_lon: RwSignal<f64>,
     on_switch: Callback<WeatherModel>,
 ) -> impl IntoView {
     let days_hero = days.clone();
@@ -161,41 +169,10 @@ fn ReadyView(
     let days_list = days;
 
     view! {
-        <Hero days=days_hero refreshed_at=refreshed_at />
+        <Hero days=days_hero refreshed_at=refreshed_at model=model grid_lat=grid_lat grid_lon=grid_lon on_switch=on_switch.clone() />
         <TimelineNav days=days_nav view_start=view_start selected=selected />
         <Timeline days=days_list view_start=view_start selected=selected />
         <footer class="footer">
-            <div class="footer-controls">
-                <div class="model-toggle">
-                    <span class="toggle-label">"Model: "</span>
-                    <button
-                        type="button"
-                        class=move || {
-                            if model.get() == WeatherModel::GfsSeamless {
-                                "model-btn active"
-                            } else {
-                                "model-btn"
-                            }
-                        }
-                        on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
-                    >
-                        "GFS"
-                    </button>
-                    <button
-                        type="button"
-                        class=move || {
-                            if model.get() == WeatherModel::Ecmwf {
-                                "model-btn active"
-                            } else {
-                                "model-btn"
-                            }
-                        }
-                        on:click=move |_| on_switch.run(WeatherModel::Ecmwf)
-                    >
-                        "ECMWF"
-                    </button>
-                </div>
-            </div>
             <p>
                 "Heuristic for sandy dune trails that pack firm after rain. "
                 "Not trail status - ride at your own judgment."
@@ -222,12 +199,72 @@ fn ReadyView(
 }
 
 #[component]
-fn Hero(days: Vec<DayForecast>, refreshed_at: RwSignal<String>) -> impl IntoView {
+fn Hero(
+    days: Vec<DayForecast>,
+    refreshed_at: RwSignal<String>,
+    model: RwSignal<WeatherModel>,
+    grid_lat: RwSignal<f64>,
+    grid_lon: RwSignal<f64>,
+    on_switch: Callback<WeatherModel>,
+) -> impl IntoView {
     let best = days.iter().find(|d| d.best).cloned();
 
     view! {
         <section class="hero">
-            <p class="label">"Best ride window (today onward)"</p>
+            <div class="hero-top-bar">
+                <p class="label">"Best ride window"</p>
+                <div class="hero-toggle">
+                    <div class="model-toggle">
+                        <button
+                            type="button"
+                            class=move || {
+                                if model.get() == WeatherModel::GfsSeamless {
+                                    "model-btn active"
+                                } else {
+                                    "model-btn"
+                                }
+                            }
+                            on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
+                        >
+                            "GFS"
+                        </button>
+                        <button
+                            type="button"
+                            class=move || {
+                                if model.get() == WeatherModel::Ecmwf {
+                                    "model-btn active"
+                                } else {
+                                    "model-btn"
+                                }
+                            }
+                            on:click=move |_| on_switch.run(WeatherModel::Ecmwf)
+                        >
+                            "ECMWF"
+                        </button>
+                    </div>
+                    <p class="hero-distance">
+                        {move || {
+                            let lat = grid_lat.get();
+                            let lon = grid_lon.get();
+                            if lat == 0.0 && lon == 0.0 {
+                                return String::new();
+                            }
+                            let km = haversine_km(
+                                weather::LAT,
+                                weather::LON,
+                                lat,
+                                lon,
+                            );
+                            let mi = km * 0.621371;
+                            if mi < 0.1 {
+                                "grid at trailhead".to_string()
+                            } else {
+                                format!("forecast {mi:.1} mi from trailhead")
+                            }
+                        }}
+                    </p>
+                </div>
+            </div>
             {match best {
                 Some(d) => {
                     let name = format_long(d.date);
@@ -495,4 +532,16 @@ fn format_dow(d: NaiveDate) -> String {
 fn is_weekend(d: NaiveDate) -> bool {
     use chrono::Datelike;
     matches!(d.weekday(), chrono::Weekday::Sat | chrono::Weekday::Sun)
+}
+
+fn haversine_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let r = 6371.0_f64;
+    let la1 = lat1.to_radians();
+    let la2 = lat2.to_radians();
+    let dlat = (lat2 - lat1).to_radians();
+    let dlon = (lon2 - lon1).to_radians();
+    let a = (dlat / 2.0).sin().powi(2)
+        + la1.cos() * la2.cos() * (dlon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().asin();
+    r * c
 }
