@@ -353,7 +353,13 @@ fn Timeline(
                                         c
                                     }
                                     style=tint
-                                    on:click=move |_| selected.set(Some(date))
+                                    on:click=move |_| {
+                                        if selected.get() == Some(date) {
+                                            selected.set(None);
+                                        } else {
+                                            selected.set(Some(date));
+                                        }
+                                    }
                                 >
                                     <div class="date">
                                         {date_s}
