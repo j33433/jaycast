@@ -80,16 +80,6 @@ pub fn App() -> impl IntoView {
                         <br/>
                         {LOCATION_SUB}
                     </p>
-                    <p class="meta">
-                        {move || {
-                            let t = refreshed_at.get();
-                            if t.is_empty() {
-                                "loading...".to_string()
-                            } else {
-                                format!("updated {t}")
-                            }
-                        }}
-                    </p>
                 </div>
             </header>
 
@@ -106,6 +96,7 @@ pub fn App() -> impl IntoView {
                         days=days
                         selected=selected
                         view_start=view_start
+                        refreshed_at=refreshed_at
                         on_refresh=Callback::new(move |_| {
                             weather::clear_cache();
                             load();
@@ -146,18 +137,17 @@ fn ReadyView(
     days: Vec<DayForecast>,
     selected: RwSignal<Option<NaiveDate>>,
     view_start: RwSignal<usize>,
+    refreshed_at: RwSignal<String>,
     on_refresh: Callback<()>,
 ) -> impl IntoView {
     let days_hero = days.clone();
     let days_nav = days.clone();
-    let days_list = days.clone();
-    let days_detail = days;
+    let days_list = days;
 
     view! {
-        <Hero days=days_hero />
+        <Hero days=days_hero refreshed_at=refreshed_at />
         <TimelineNav days=days_nav view_start=view_start selected=selected />
         <Timeline days=days_list view_start=view_start selected=selected />
-        <DayDetail days=days_detail selected=selected />
         <footer class="footer">
             <p>
                 "Rideability is a heuristic for sandy dune trails that pack firm after rain. "
@@ -190,7 +180,7 @@ fn ReadyView(
 }
 
 #[component]
-fn Hero(days: Vec<DayForecast>) -> impl IntoView {
+fn Hero(days: Vec<DayForecast>, refreshed_at: RwSignal<String>) -> impl IntoView {
     let best = days.iter().find(|d| d.best).cloned();
 
     view! {
@@ -215,6 +205,16 @@ fn Hero(days: Vec<DayForecast>) -> impl IntoView {
                 }
                 .into_any(),
             }}
+            <p class="hero-updated">
+                {move || {
+                    let t = refreshed_at.get();
+                    if t.is_empty() {
+                        "updated...".to_string()
+                    } else {
+                        format!("updated {t}")
+                    }
+                }}
+            </p>
         </section>
     }
 }
@@ -315,6 +315,7 @@ fn Timeline(
                         let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
                         let date_s = format_short(date);
                         let tint = score_style(d.score);
+                        let detail = d.clone();
                         let dow = if is_today {
                             "Today".to_string()
                         } else if is_past {
@@ -323,44 +324,49 @@ fn Timeline(
                             format_dow(date)
                         };
                         view! {
-                            <button
-                                type="button"
-                                class=move || {
-                                    let mut c = String::from("day-card");
-                                    if is_best {
-                                        c.push_str(" best");
+                            <div class="day-row" role="listitem">
+                                <button
+                                    type="button"
+                                    class=move || {
+                                        let mut c = String::from("day-card");
+                                        if is_best {
+                                            c.push_str(" best");
+                                        }
+                                        if is_past {
+                                            c.push_str(" past");
+                                        }
+                                        if is_today {
+                                            c.push_str(" today");
+                                        }
+                                        if is_weekend {
+                                            c.push_str(" weekend");
+                                        }
+                                        if selected.get() == Some(date) {
+                                            c.push_str(" selected");
+                                        }
+                                        c
                                     }
-                                    if is_past {
-                                        c.push_str(" past");
-                                    }
-                                    if is_today {
-                                        c.push_str(" today");
-                                    }
-                                    if is_weekend {
-                                        c.push_str(" weekend");
-                                    }
-                                    if selected.get() == Some(date) {
-                                        c.push_str(" selected");
-                                    }
-                                    c
-                                }
-                                style=tint
-                                role="listitem"
-                                on:click=move |_| selected.set(Some(date))
-                            >
-                                <div class="date">
-                                    {date_s}
-                                    <span class="dow">{dow}</span>
-                                </div>
-                                <div class="mid">
-                                    <div class="stars-sm">{stars}</div>
-                                    <div class="blurb">{blurb}</div>
-                                </div>
-                                <div class="precip">
-                                    {precip}
-                                    <span class="temp">{temp}</span>
-                                </div>
-                            </button>
+                                    style=tint
+                                    on:click=move |_| selected.set(Some(date))
+                                >
+                                    <div class="date">
+                                        {date_s}
+                                        <span class="dow">{dow}</span>
+                                    </div>
+                                    <div class="mid">
+                                        <div class="stars-sm">{stars}</div>
+                                        <div class="blurb">{blurb}</div>
+                                    </div>
+                                    <div class="precip">
+                                        {precip}
+                                        <span class="temp">{temp}</span>
+                                    </div>
+                                </button>
+                                {move || {
+                                    (selected.get() == Some(date))
+                                        .then(|| day_detail_view(detail.clone()))
+                                }}
+                            </div>
                         }
                     })
                     .collect_view()
@@ -369,78 +375,53 @@ fn Timeline(
     }
 }
 
-#[component]
-fn DayDetail(days: Vec<DayForecast>, selected: RwSignal<Option<NaiveDate>>) -> impl IntoView {
+fn day_detail_view(d: DayForecast) -> impl IntoView {
+    // Bubble already shows date, stars, precip, and temps; keep only extra context here.
+    let score_line = format!(
+        "score {:.0}% · {:.0}% rain chance",
+        d.score * 100.0,
+        d.precip_prob_max
+    );
+    let tint = score_style(d.score);
     view! {
-        {move || {
-            let sel = selected.get();
-            let day = days.iter().find(|d| Some(d.date) == sel).cloned();
-            match day {
-                None => view! { <div></div> }.into_any(),
-                Some(d) => {
-                    let badge = if d.best {
-                        " · best"
-                    } else if d.is_today {
-                        " · today"
-                    } else if d.is_past {
-                        " · past"
-                    } else {
-                        ""
-                    };
-                    let title = format!("{}{}", format_long(d.date), badge);
-                    let score_line = format!(
-                        "{} · score {:.0}% · {:.2}\" rain · {:.0}% chance",
-                        stars_str(d.stars),
-                        d.score * 100.0,
-                        d.precip_in,
-                        d.precip_prob_max
-                    );
-                    let tint = score_style(d.score);
-                    view! {
-                        <section class="detail" style=tint>
-                            <h2>{title}</h2>
-                            <p class="score-line">{score_line}</p>
-                            <ul class="factors">
-                                {d.factors
-                                    .into_iter()
-                                    .map(|f| {
-                                        let cls = if f.contribution > 0.08 {
-                                            "contrib pos"
-                                        } else if f.contribution < -0.08 {
-                                            "contrib neg"
-                                        } else {
-                                            "contrib neu"
-                                        };
-                                        let bar_cls = if f.quality >= 0.65 {
-                                            "bar-fill"
-                                        } else if f.quality >= 0.4 {
-                                            "bar-fill warn"
-                                        } else {
-                                            "bar-fill bad"
-                                        };
-                                        let width = format!("width:{:.0}%", f.quality * 100.0);
-                                        let contrib = format!("{:+.0}%", f.contribution * 50.0);
-                                        let name = f.name;
-                                        let note = f.note;
-                                        view! {
-                                            <li class="factor">
-                                                <span class="name">{name}</span>
-                                                <span class=cls>{contrib}</span>
-                                                <span class="note">{note}</span>
-                                                <div class="bar-track">
-                                                    <div class=bar_cls style=width></div>
-                                                </div>
-                                            </li>
-                                        }
-                                    })
-                                    .collect_view()}
-                            </ul>
-                        </section>
-                    }
-                    .into_any()
-                }
-            }
-        }}
+        <section class="detail" style=tint>
+            <p class="score-line">{score_line}</p>
+            <ul class="factors">
+                {d.factors
+                    .into_iter()
+                    .map(|f| {
+                        let cls = if f.contribution > 0.08 {
+                            "contrib pos"
+                        } else if f.contribution < -0.08 {
+                            "contrib neg"
+                        } else {
+                            "contrib neu"
+                        };
+                        let bar_cls = if f.quality >= 0.65 {
+                            "bar-fill"
+                        } else if f.quality >= 0.4 {
+                            "bar-fill warn"
+                        } else {
+                            "bar-fill bad"
+                        };
+                        let width = format!("width:{:.0}%", f.quality * 100.0);
+                        let contrib = format!("{:+.0}%", f.contribution * 50.0);
+                        let name = f.name;
+                        let note = f.note;
+                        view! {
+                            <li class="factor">
+                                <span class="name">{name}</span>
+                                <span class=cls>{contrib}</span>
+                                <span class="note">{note}</span>
+                                <div class="bar-track">
+                                    <div class=bar_cls style=width></div>
+                                </div>
+                            </li>
+                        }
+                    })
+                    .collect_view()}
+            </ul>
+        </section>
     }
 }
 

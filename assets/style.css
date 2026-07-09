@@ -164,12 +164,6 @@ body {
   line-height: 1.4;
 }
 
-.header .meta {
-  margin: 0.2rem 0 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
 /* Hero */
 .hero {
   background:
@@ -218,9 +212,10 @@ body {
 }
 
 .hero .why {
-  margin: 0.5rem 0 0;
+  margin: 0.5rem 2.5rem 0 0;
   font-size: 0.95rem;
   color: var(--text-muted);
+  padding-bottom: 0.35rem;
 }
 
 .hero .stars {
@@ -230,6 +225,17 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--score-color, var(--star));
+  line-height: 1;
+}
+
+.hero-updated {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.7rem;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
@@ -292,8 +298,16 @@ body {
 .timeline {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.55rem;
   margin-bottom: 1.5rem;
+}
+
+.day-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 0;
 }
 
 .day-card {
@@ -318,6 +332,8 @@ body {
   font: inherit;
   color: inherit;
   width: 100%;
+  position: relative;
+  z-index: 1;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, filter 0.15s;
 }
 
@@ -427,31 +443,43 @@ body {
   margin-top: 0.15rem;
 }
 
-/* Detail panel */
+/* Detail panel: unfurls under selected day card */
 .detail {
   --score-color: var(--border);
+  width: calc(100% - 1.35rem);
+  box-sizing: border-box;
   background:
     linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--score-color) 16%, var(--bg-elev)) 0%,
-      var(--bg-elev) 55%
+      180deg,
+      color-mix(in srgb, var(--score-color) 14%, var(--bg-elev)) 0%,
+      var(--bg-elev) 40%
     );
-  border: 1px solid color-mix(in srgb, var(--score-color) 30%, var(--border));
-  border-left: 4px solid var(--score-color);
-  border-radius: var(--radius);
-  padding: 1.15rem 1.25rem;
-  margin-bottom: 1.5rem;
+  border: 1px solid color-mix(in srgb, var(--score-color) 35%, var(--border));
+  border-top: none;
+  border-left: 3px solid var(--score-color);
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 0.95rem 1.1rem 1.1rem;
+  margin: -2px 0 0;
+  position: relative;
+  z-index: 0;
+  animation: unfurl 0.18s ease-out;
 }
 
-.detail h2 {
-  margin: 0 0 0.25rem;
-  font-size: 1.1rem;
+@keyframes unfurl {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .detail .score-line {
   font-size: 0.85rem;
   color: var(--text-muted);
-  margin: 0 0 1rem;
+  margin: 0 0 0.85rem;
 }
 
 .factors {
