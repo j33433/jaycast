@@ -5,7 +5,7 @@
    viewBox="0 0 2048 2048"
    width="1024"
    height="1024"
-   preserveAspectRatio="none"
+   preserveAspectRatio="xMidYMid meet"
    id="svg142"
    sodipodi:docname="jaycast-plain.svg"
    inkscape:version="1.4.2 (f4327f4, 2025-05-13)"

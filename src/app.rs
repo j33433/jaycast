@@ -97,9 +97,9 @@ pub fn App() -> impl IntoView {
             <header class="header">
                 <img
                     class="jay-mark"
-                    src="/jaycast/jaycast-icon.png"
-                    width="97"
-                    height="110"
+                    src="/jaycast/jaycast-plain.svg"
+                    width="100"
+                    height="100"
                     alt=""
                 />
                 <div class="header-text">
