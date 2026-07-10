@@ -69,11 +69,13 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
     let (wx_q, wx_factors) = weather_quality(day, p);
     let (conf_q, conf_factor) = confidence(day.date, today);
 
-    // Hard gate: heavy rain on the ride day tanks the whole score.
-    let wet_gate = if day.precip_in >= p.ride_day_precip_hard {
+    // Hard gate: rain falling during the (morning) ride window tanks the score.
+    // Fast-draining sand means afternoon rain barely matters, so the gate keys
+    // off morning precip rather than the whole-day total.
+    let wet_gate = if day.precip_am_in >= p.ride_day_precip_hard {
         0.25
-    } else if day.precip_in > p.ride_day_precip_soft {
-        let t = (day.precip_in - p.ride_day_precip_soft)
+    } else if day.precip_am_in > p.ride_day_precip_soft {
+        let t = (day.precip_am_in - p.ride_day_precip_soft)
             / (p.ride_day_precip_hard - p.ride_day_precip_soft);
         lerp(0.9, 0.25, t.clamp(0.0, 1.0))
     } else {
@@ -129,6 +131,12 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     // Hours since last significant rain day (midpoint of that day → ride day).
     let hours_since = hours_since_significant_rain(days, idx, p.significant_rain_in);
 
+    // Sun dries this shadeless sand fast; cloud slows it. Scale the drying clock
+    // by ET0 accumulated since the rain: sunny stretches reach firm pack sooner
+    // and dry out to soft faster; cloudy stretches keep the sand fresh longer.
+    let dry_factor = drying_factor(days, idx, hours_since, p);
+    let effective_hours = hours_since.map(|h| h * dry_factor);
+
     // Antecedent rain amount score: triangle around ideal.
     let amount_q = trap_score(
         antecedent,
@@ -139,7 +147,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     );
 
     // Timing: best near ideal_hours_since_rain, fades to 0 at pack_fade_hours.
-    let timing_q = match hours_since {
+    let timing_q = match effective_hours {
         None => 0.15, // long dry spell / never — soft sand baseline
         Some(h) if h < 6.0 => 0.35, // still very fresh / maybe wet
         Some(h) => {
@@ -156,44 +164,28 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         }
     };
 
-    // Ride-day wetness penalty (applied inside pack as "surface condition").
-    let wet_q = if day.precip_in <= p.ride_day_precip_soft {
-        1.0 - (day.precip_prob_max / 100.0) * 0.25
-    } else if day.precip_in >= p.ride_day_precip_hard {
-        0.05
+    // Rain during the ride. Wet ground is fine here (drains fast), so only rain
+    // actually falling in the morning ride window is penalized; afternoon rain
+    // is nearly ignored.
+    let ride_rain = day.precip_am_in + day.precip_pm_in * 0.15;
+    let wet_q = if ride_rain <= p.ride_day_precip_soft {
+        1.0 - (day.precip_prob_max / 100.0) * 0.1
+    } else if ride_rain >= p.ride_day_precip_hard {
+        0.1
     } else {
-        let t = (day.precip_in - p.ride_day_precip_soft)
+        let t = (ride_rain - p.ride_day_precip_soft)
             / (p.ride_day_precip_hard - p.ride_day_precip_soft);
-        lerp(0.85, 0.05, t.clamp(0.0, 1.0)) * (1.0 - (day.precip_prob_max / 100.0) * 0.15)
+        lerp(0.9, 0.1, t.clamp(0.0, 1.0))
     };
 
-    // Soil moisture bonus (secondary).
-    let (soil_q, soil_note) = match day.soil_moisture {
-        Some(sm) if sm >= p.soil_ideal_low && sm <= p.soil_ideal_high => {
-            (1.0, format!("soil moisture {sm:.2} m³/m³ in firm band"))
-        }
-        Some(sm) if sm > p.soil_ideal_high => {
-            let over = ((sm - p.soil_ideal_high) / 0.15).clamp(0.0, 1.0);
-            (
-                lerp(0.7, 0.25, over),
-                format!("soil moisture {sm:.2} m³/m³ (wet side)"),
-            )
-        }
-        Some(sm) => (
-            lerp(0.35, 0.7, (sm / p.soil_ideal_low).clamp(0.0, 1.0)),
-            format!("soil moisture {sm:.2} m³/m³ (dry side)"),
-        ),
-        None => (0.55, "soil moisture unavailable".into()),
-    };
+    // Combine pack sub-signals (soil moisture dropped — was modeled, not sensed).
+    let pack = (0.45 * amount_q + 0.40 * timing_q + 0.15 * wet_q).clamp(0.0, 1.0);
 
-    // Combine pack sub-signals.
-    let pack = (0.40 * amount_q + 0.35 * timing_q + 0.20 * wet_q + 0.05 * soil_q).clamp(0.0, 1.0);
-
-    let timing_note = match hours_since {
+    let timing_note = match effective_hours {
         None => "no significant rain in lookback — sand likely soft".into(),
-        Some(h) if h < 12.0 => format!("~{h:.0}h since last solid rain — still settling"),
-        Some(h) if h <= 48.0 => format!("~{h:.0}h since last solid rain — pack window"),
-        Some(h) => format!("~{h:.0}h since last solid rain — drying out"),
+        Some(h) if h < 12.0 => format!("~{h:.0}h drying since rain — still settling"),
+        Some(h) if h <= 48.0 => format!("~{h:.0}h drying since rain — pack window"),
+        Some(h) => format!("~{h:.0}h drying since rain — drying out"),
     };
 
     let amount_note = if antecedent < p.min_useful_rain_in {
@@ -204,21 +196,20 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         format!("{antecedent:.2} in rain in prior ~{:.0}h", p.pack_lookback_hours)
     };
 
-    let wet_note = if day.precip_in > p.ride_day_precip_soft {
+    let wet_note = if day.precip_am_in > p.ride_day_precip_soft {
         format!(
-            "{:.2} in expected on ride day ({:.0}% chance)",
-            day.precip_in, day.precip_prob_max
+            "{:.2} in morning rain ({:.0}% chance) — likely riding wet",
+            day.precip_am_in, day.precip_prob_max
+        )
+    } else if day.precip_pm_in > p.ride_day_precip_soft {
+        format!(
+            "{:.2} in afternoon rain — dry morning window",
+            day.precip_pm_in
         )
     } else if day.precip_prob_max >= 40.0 {
-        format!(
-            "{:.0}% rain chance, {:.2} in forecast",
-            day.precip_prob_max, day.precip_in
-        )
+        format!("{:.0}% rain chance, mostly dry", day.precip_prob_max)
     } else {
-        format!(
-            "mostly dry day ({:.2} in, {:.0}% chance)",
-            day.precip_in, day.precip_prob_max
-        )
+        format!("dry ride window ({:.0}% chance)", day.precip_prob_max)
     };
 
     let factors = vec![
@@ -235,22 +226,13 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
             quality: timing_q,
         },
         Factor {
-            name: "Ride-day wetness",
+            name: "Rain during ride",
             note: wet_note,
             contribution: wet_q * 2.0 - 1.0,
             quality: wet_q,
         },
-        Factor {
-            name: "Soil moisture",
-            note: soil_note,
-            contribution: (soil_q * 2.0 - 1.0) * 0.4,
-            quality: soil_q,
-        },
     ];
 
-    // Recompute pack for return; factors already set.
-    let _ = pack;
-    let pack = (0.40 * amount_q + 0.35 * timing_q + 0.20 * wet_q + 0.05 * soil_q).clamp(0.0, 1.0);
     (pack, factors)
 }
 
@@ -283,15 +265,23 @@ fn weather_quality(day: &DayWeather, p: &Params) -> (f64, Vec<Factor>) {
     let temp_q = (temp_q - apparent_pen).clamp(0.0, 1.0);
 
     let wind = day.wind_max_mph.max(day.gust_max_mph * 0.7);
-    let wind_q = if wind <= p.wind_ok {
+    // Centered band: a light breeze is ideal; dead calm dings (hot, buggy, still)
+    // and gales ding harder.
+    let wind_q = if wind >= p.wind_ideal_low && wind <= p.wind_ideal_high {
         1.0
+    } else if wind < p.wind_ideal_low {
+        lerp(
+            p.wind_calm_floor,
+            1.0,
+            (wind / p.wind_ideal_low).clamp(0.0, 1.0),
+        )
     } else if wind >= p.wind_bad {
         0.2
     } else {
         lerp(
             1.0,
             0.2,
-            ((wind - p.wind_ok) / (p.wind_bad - p.wind_ok)).clamp(0.0, 1.0),
+            ((wind - p.wind_ideal_high) / (p.wind_bad - p.wind_ideal_high)).clamp(0.0, 1.0),
         )
     };
 
@@ -375,6 +365,34 @@ fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
     )
 }
 
+/// Drying-clock multiplier from ET0 (sun) since the last significant rain.
+/// Mean ET0 above the reference dries faster (>1, up to 1+modulation); below
+/// reference (cloudy) dries slower (<1, down to 1-modulation). Returns 1.0 when
+/// there is no rain reference or no ET0 data.
+fn drying_factor(
+    days: &[DayWeather],
+    idx: usize,
+    hours_since: Option<f64>,
+    p: &Params,
+) -> f64 {
+    let Some(h) = hours_since else {
+        return 1.0;
+    };
+    // Days since rain to average ET0 over (at least the ride day itself).
+    let span = ((h / 24.0).round() as usize).max(1);
+    let start = idx.saturating_sub(span);
+    let slice = &days[start..=idx];
+    if slice.is_empty() {
+        return 1.0;
+    }
+    let mean_et0: f64 = slice.iter().map(|d| d.et0).sum::<f64>() / slice.len() as f64;
+    if p.et0_dry_ref <= 0.0 {
+        return 1.0;
+    }
+    let ratio = mean_et0 / p.et0_dry_ref;
+    ratio.clamp(1.0 - p.et0_modulation, 1.0 + p.et0_modulation)
+}
+
 fn hours_since_significant_rain(days: &[DayWeather], idx: usize, threshold: f64) -> Option<f64> {
     // Walk backward from day before ride day.
     for back in 1..=idx {
@@ -448,6 +466,7 @@ mod tests {
     use chrono::NaiveDate;
 
     fn day(date: &str, precip: f64, high: f64) -> DayWeather {
+        // Default: precip split evenly-ish, sunny drying reference.
         DayWeather {
             date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
             precip_in: precip,
@@ -457,7 +476,10 @@ mod tests {
             apparent_max_f: high + 2.0,
             wind_max_mph: 8.0,
             gust_max_mph: 14.0,
-            soil_moisture: Some(0.18),
+            et0: 0.20,
+            // Assume rain falls in the afternoon by default (convective FL storms).
+            precip_am_in: 0.0,
+            precip_pm_in: precip,
         }
     }
 
@@ -506,19 +528,91 @@ mod tests {
     }
 
     #[test]
-    fn wet_ride_day_penalized() {
-        let days = vec![
-            day("2026-07-01", 1.0, 80.0),
-            day("2026-07-02", 0.8, 78.0), // raining on ride day
-        ];
+    fn morning_rain_penalized() {
+        // Same daily total as afternoon case, but falling in the morning window.
+        let mut d1 = day("2026-07-01", 1.0, 80.0);
+        d1.precip_am_in = 0.0;
+        d1.precip_pm_in = 1.0;
+        let mut d2 = day("2026-07-02", 0.8, 78.0);
+        d2.precip_am_in = 0.8; // rains during the morning ride
+        d2.precip_pm_in = 0.0;
+        let days = vec![d1, d2];
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
         let scored = score_days(&days, today, &Params::default());
-        let d = &scored[0];
+        let d = &scored[1];
         assert!(
             d.stars <= 3.5,
-            "wet ride day should be mediocre at best, got {:.1} (score {:.2})",
+            "morning rain should tank the ride, got {:.1} (score {:.2})",
             d.stars,
             d.score
+        );
+    }
+
+    #[test]
+    fn afternoon_rain_tolerated() {
+        // Rain arrives only in the afternoon after a good packing rain.
+        let mut prior = day("2026-07-01", 1.0, 80.0);
+        prior.precip_am_in = 0.0;
+        prior.precip_pm_in = 1.0;
+        let mut ride = day("2026-07-02", 0.5, 82.0);
+        ride.precip_am_in = 0.0; // dry morning
+        ride.precip_pm_in = 0.5; // afternoon storm
+        let days = vec![prior, ride];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(&days, today, &Params::default());
+        let d = &scored[1];
+        assert!(
+            d.stars >= 3.5,
+            "afternoon-only rain should stay rideable, got {:.1} (score {:.2})",
+            d.stars,
+            d.score
+        );
+    }
+
+    #[test]
+    fn cloudy_slows_drying_vs_sunny() {
+        // Identical rain history; one week sunny (high ET0), one cloudy (low ET0),
+        // riding a few days out so the drying window matters.
+        let mk = |et0: f64| {
+            let mut v = Vec::new();
+            for i in 1..=5 {
+                let mut dd = day(&format!("2026-07-{i:02}"), 0.0, 84.0);
+                dd.et0 = et0;
+                v.push(dd);
+            }
+            // Big packing rain 3 days before ride.
+            v[1].precip_in = 1.0;
+            v[1].precip_pm_in = 1.0;
+            v
+        };
+        let today = NaiveDate::from_ymd_opt(2026, 7, 5).unwrap();
+        let sunny = score_days(&mk(0.30), today, &Params::default());
+        let cloudy = score_days(&mk(0.08), today, &Params::default());
+        let s = sunny.iter().find(|d| d.date == today).unwrap();
+        let c = cloudy.iter().find(|d| d.date == today).unwrap();
+        // Sunny dried further past peak (lower timing) OR cloudy held fresher.
+        // Either way the two should differ, proving ET0 modulates timing.
+        assert!(
+            (s.score - c.score).abs() > 1e-3,
+            "ET0 should change the score: sunny {:.3} vs cloudy {:.3}",
+            s.score,
+            c.score
+        );
+    }
+
+    #[test]
+    fn dead_calm_dings_wind() {
+        let mut calm = day("2026-07-02", 0.0, 78.0);
+        calm.wind_max_mph = 0.0;
+        calm.gust_max_mph = 0.0;
+        let mut breeze = day("2026-07-02", 0.0, 78.0);
+        breeze.wind_max_mph = 8.0;
+        breeze.gust_max_mph = 12.0;
+        let (calm_q, _) = weather_quality(&calm, &Params::default());
+        let (breeze_q, _) = weather_quality(&breeze, &Params::default());
+        assert!(
+            breeze_q > calm_q,
+            "light breeze should beat dead calm: {breeze_q:.3} vs {calm_q:.3}"
         );
     }
 
