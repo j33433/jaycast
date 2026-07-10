@@ -89,8 +89,8 @@ pub fn App() -> impl IntoView {
                 <img
                     class="jay-mark"
                     src="/jaycast/jaycast-icon.png"
-                    width="106"
-                    height="120"
+                    width="97"
+                    height="110"
                     alt=""
                 />
                 <div class="header-text">

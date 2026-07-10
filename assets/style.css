@@ -118,8 +118,10 @@ body {
 
 .jay-mark {
   flex-shrink: 0;
-  width: 106px;
-  height: 120px;
+  box-sizing: content-box;
+  width: 97px;
+  height: 110px;
+  padding: 6px;
   border-radius: 0;
   object-fit: contain;
   display: block;
@@ -224,11 +226,12 @@ body {
 }
 
 .hero-toggle .hero-distance {
-  margin: 0.3rem 0 0;
-  font-size: 0.68rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   text-align: right;
+  line-height: 1;
 }
 
 @media (prefers-color-scheme: light) {
@@ -244,10 +247,10 @@ body {
 }
 
 .hero .why {
-  margin: 0.5rem 2.5rem 0 0;
+  margin: 0.5rem 8rem 0 0;
   font-size: 0.95rem;
   color: var(--text-muted);
-  padding-bottom: 0.35rem;
+  padding-bottom: 0;
 }
 
 .hero .stars {
@@ -262,13 +265,13 @@ body {
 
 .hero-updated {
   position: absolute;
-  right: 1rem;
-  bottom: 0.7rem;
+  right: 1.35rem;
+  bottom: 1.25rem;
   margin: 0;
   font-size: 0.72rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 1.45;
 }
 
 /* Timeline nav (scroll history) */
