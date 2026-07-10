@@ -17,21 +17,27 @@ pub struct Params {
     pub ideal_hours_since_rain: f64,
     /// After this many dry hours, pack benefit fades out.
     pub pack_fade_hours: f64,
-    /// Ride-day precip that starts a real penalty (inches).
+    /// Morning-rain amount that starts a real "rained-on ride" penalty (inches).
     pub ride_day_precip_soft: f64,
-    /// Ride-day precip that fully tanks the wet penalty (inches).
+    /// Morning-rain amount that fully tanks the ride (inches).
     pub ride_day_precip_hard: f64,
+    /// Reference daily ET0 (inches) for "normal" drying. Sunny days exceed it
+    /// (dry faster), cloudy days fall below (stay damp longer).
+    pub et0_dry_ref: f64,
+    /// Max fractional stretch/compression of the drying clock from ET0 (0..1).
+    pub et0_modulation: f64,
     /// Comfortable high temp band (°F).
     pub temp_ideal_low: f64,
     pub temp_ideal_high: f64,
     pub temp_ok_low: f64,
     pub temp_ok_high: f64,
-    /// Wind (mph) comfort.
-    pub wind_ok: f64,
+    /// Wind (mph) comfort: centered band, calm and gale both ding.
+    pub wind_ideal_low: f64,
+    pub wind_ideal_high: f64,
+    /// Quality at dead calm (0 mph), 0..1.
+    pub wind_calm_floor: f64,
+    /// Wind (mph) where quality bottoms out.
     pub wind_bad: f64,
-    /// Soil moisture (m³/m³) sweet band after rain.
-    pub soil_ideal_low: f64,
-    pub soil_ideal_high: f64,
     /// Factor weights (should sum ~1).
     pub w_pack: f64,
     pub w_weather: f64,
@@ -50,14 +56,16 @@ impl Default for Params {
             pack_fade_hours: 120.0, // ~5 days
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
+            et0_dry_ref: 0.20,
+            et0_modulation: 0.30,
             temp_ideal_low: 65.0,
             temp_ideal_high: 85.0,
             temp_ok_low: 55.0,
             temp_ok_high: 95.0,
-            wind_ok: 15.0,
+            wind_ideal_low: 5.0,
+            wind_ideal_high: 12.0,
+            wind_calm_floor: 0.7,
             wind_bad: 28.0,
-            soil_ideal_low: 0.12,
-            soil_ideal_high: 0.28,
             w_pack: 0.55,
             w_weather: 0.35,
             w_confidence: 0.10,

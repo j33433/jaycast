@@ -1,5 +1,8 @@
 use serde::Deserialize;
 
+/// Local hour (0-23) that splits morning rain (penalized) from afternoon.
+const AM_RAIN_CUTOFF_HOUR: u32 = 12;
+
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct ForecastResponse {
     pub latitude: f64,
@@ -29,14 +32,6 @@ pub struct DailyBlock {
 pub struct HourlyBlock {
     pub time: Vec<String>,
     pub precipitation: Vec<Option<f64>>,
-    #[serde(default)]
-    pub soil_moisture_0_to_10cm: Vec<Option<f64>>,
-    #[serde(default)]
-    pub soil_moisture_10_to_40cm: Vec<Option<f64>>,
-    #[serde(default)]
-    pub soil_moisture_0_to_7cm: Vec<Option<f64>>,
-    #[serde(default)]
-    pub soil_moisture_7_to_28cm: Vec<Option<f64>>,
 }
 
 /// One calendar day of inputs used by the scorer.
@@ -50,8 +45,13 @@ pub struct DayWeather {
     pub apparent_max_f: f64,
     pub wind_max_mph: f64,
     pub gust_max_mph: f64,
-    /// Mean shallow soil moisture for the day (m³/m³), if available.
-    pub soil_moisture: Option<f64>,
+    /// Reference evapotranspiration for the day (inches). Drying-rate proxy:
+    /// high under sun, low under cloud.
+    pub et0: f64,
+    /// Precip falling in the morning ride window (before noon local), inches.
+    pub precip_am_in: f64,
+    /// Precip falling in the afternoon (noon local onward), inches.
+    pub precip_pm_in: f64,
 }
 
 impl ForecastResponse {
@@ -65,7 +65,7 @@ impl ForecastResponse {
                 Err(_) => continue,
             };
 
-            let soil = self.mean_soil_for_date(&self.daily.time[i]);
+            let (precip_am_in, precip_pm_in) = self.precip_split_for_date(&self.daily.time[i]);
 
             out.push(DayWeather {
                 date,
@@ -76,45 +76,48 @@ impl ForecastResponse {
                 apparent_max_f: opt(self.daily.apparent_temperature_max.get(i)),
                 wind_max_mph: opt(self.daily.wind_speed_10m_max.get(i)),
                 gust_max_mph: opt(self.daily.wind_gusts_10m_max.get(i)),
-                soil_moisture: soil,
+                et0: opt(self.daily.et0_fao_evapotranspiration.get(i)),
+                precip_am_in,
+                precip_pm_in,
             });
         }
 
         out
     }
 
-    fn mean_soil_for_date(&self, date_str: &str) -> Option<f64> {
-        let hourly = self.hourly.as_ref()?;
-        let mut sum = 0.0;
-        let mut count = 0u32;
+    /// Sum hourly precip for a date into (morning, afternoon) inches.
+    /// Hourly timestamps are local (timezone param set), so the hour is read
+    /// directly from the `THH` portion of the ISO string.
+    fn precip_split_for_date(&self, date_str: &str) -> (f64, f64) {
+        let Some(hourly) = self.hourly.as_ref() else {
+            return (0.0, 0.0);
+        };
+        let mut am = 0.0;
+        let mut pm = 0.0;
 
         for (i, t) in hourly.time.iter().enumerate() {
             if !t.starts_with(date_str) {
                 continue;
             }
-            let s0 = hourly.soil_moisture_0_to_10cm.get(i).and_then(|v| *v);
-            let s1 = hourly.soil_moisture_10_to_40cm.get(i).and_then(|v| *v);
-            let e0 = hourly.soil_moisture_0_to_7cm.get(i).and_then(|v| *v);
-            let e1 = hourly.soil_moisture_7_to_28cm.get(i).and_then(|v| *v);
-            let val = match (s0, s1, e0, e1) {
-                (Some(a), Some(b), _, _) => (a * 0.65) + (b * 0.35),
-                (Some(a), None, _, _) => a,
-                (None, Some(b), _, _) => b,
-                (None, None, Some(a), Some(b)) => (a * 0.65) + (b * 0.35),
-                (None, None, Some(a), None) => a,
-                (None, None, None, Some(b)) => b,
-                (None, None, None, None) => continue,
+            let Some(p) = hourly.precipitation.get(i).and_then(|v| *v) else {
+                continue;
             };
-            sum += val;
-            count += 1;
+            match hour_of(t) {
+                Some(h) if h < AM_RAIN_CUTOFF_HOUR => am += p,
+                Some(_) => pm += p,
+                None => pm += p,
+            }
         }
 
-        if count == 0 {
-            None
-        } else {
-            Some(sum / f64::from(count))
-        }
+        (am, pm)
     }
+}
+
+/// Parse the local hour from an ISO8601 local timestamp like `2026-07-10T13:00`.
+fn hour_of(ts: &str) -> Option<u32> {
+    let time_part = ts.split('T').nth(1)?;
+    let hh = time_part.split(':').next()?;
+    hh.parse::<u32>().ok()
 }
 
 fn opt(v: Option<&Option<f64>>) -> f64 {

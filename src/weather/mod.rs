@@ -59,17 +59,10 @@ impl WeatherModel {
         }
     }
 
-    fn soil_hourly(self) -> &'static str {
-        match self {
-            WeatherModel::GfsSeamless => "soil_moisture_0_to_10cm,soil_moisture_10_to_40cm",
-            WeatherModel::Ecmwf => "soil_moisture_0_to_7cm,soil_moisture_7_to_28cm",
-        }
-    }
-
     fn cache_key(self) -> &'static str {
         match self {
-            WeatherModel::GfsSeamless => "jaycast:om:v5-gfs",
-            WeatherModel::Ecmwf => "jaycast:om:v5-ecmwf",
+            WeatherModel::GfsSeamless => "jaycast:om:v6-gfs",
+            WeatherModel::Ecmwf => "jaycast:om:v6-ecmwf",
         }
     }
 }
@@ -140,7 +133,7 @@ fn build_url(model: WeatherModel) -> String {
          apparent_temperature_max,wind_speed_10m_max,wind_gusts_10m_max,\
          weather_code,et0_fao_evapotranspiration",
     );
-    url.push_str(&format!("&hourly=precipitation,{}", model.soil_hourly()));
+    url.push_str("&hourly=precipitation");
     url.push_str("&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch");
     url
 }
