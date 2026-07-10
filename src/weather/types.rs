@@ -16,15 +16,12 @@ pub struct ForecastResponse {
 pub struct DailyBlock {
     pub time: Vec<String>,
     pub precipitation_sum: Vec<Option<f64>>,
-    pub rain_sum: Vec<Option<f64>>,
-    pub precipitation_hours: Vec<Option<f64>>,
     pub precipitation_probability_max: Vec<Option<f64>>,
     pub temperature_2m_max: Vec<Option<f64>>,
     pub temperature_2m_min: Vec<Option<f64>>,
     pub apparent_temperature_max: Vec<Option<f64>>,
     pub wind_speed_10m_max: Vec<Option<f64>>,
     pub wind_gusts_10m_max: Vec<Option<f64>>,
-    pub weather_code: Vec<Option<i32>>,
     pub et0_fao_evapotranspiration: Vec<Option<f64>>,
 }
 

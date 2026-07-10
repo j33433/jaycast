@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::score::{score_color, score_days, DayForecast, Params};
-use crate::weather::{self, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS, WeatherModel};
+use crate::weather::{self, WeatherModel, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS};
 
 #[derive(Clone)]
 enum LoadState {
@@ -49,8 +49,7 @@ pub fn App() -> impl IntoView {
 
                     let prev_sel = selected.get_untracked();
                     if first
-                        || (prev_sel.is_some()
-                            && !scored.iter().any(|d| Some(d.date) == prev_sel))
+                        || (prev_sel.is_some() && !scored.iter().any(|d| Some(d.date) == prev_sel))
                     {
                         let pick = scored
                             .iter()
@@ -121,7 +120,7 @@ pub fn App() -> impl IntoView {
                         model=model
                         grid_lat=grid_lat
                         grid_lon=grid_lon
-                        on_switch=Callback::new(move |m| switch_model(m))
+                        on_switch=Callback::new(switch_model)
                     />
                 }.into_any(),
             }}
@@ -169,7 +168,14 @@ fn ReadyView(
     let days_list = days;
 
     view! {
-        <Hero days=days_hero refreshed_at=refreshed_at model=model grid_lat=grid_lat grid_lon=grid_lon on_switch=on_switch.clone() />
+        <Hero
+            days=days_hero
+            refreshed_at=refreshed_at
+            model=model
+            grid_lat=grid_lat
+            grid_lon=grid_lon
+            on_switch=on_switch
+        />
         <TimelineNav days=days_nav view_start=view_start selected=selected />
         <Timeline days=days_list view_start=view_start selected=selected />
         <footer class="footer">
@@ -315,7 +321,9 @@ fn TimelineNav(
             let end = (start + VIEW_DAYS).min(n).saturating_sub(1);
             match (days.get(start), days.get(end)) {
                 (Some(a), Some(_)) if start == end => format_short(a.date),
-                (Some(a), Some(b)) => format!("{} - {}", format_short(a.date), format_short(b.date)),
+                (Some(a), Some(b)) => {
+                    format!("{} - {}", format_short(a.date), format_short(b.date))
+                }
                 _ => "No days".into(),
             }
         }
@@ -381,7 +389,6 @@ fn Timeline(
                 let end = (start + VIEW_DAYS).min(n);
                 days[start..end]
                     .iter()
-                    .cloned()
                     .map(|d| {
                         let date = d.date;
                         let is_best = d.best;
@@ -540,8 +547,7 @@ fn haversine_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let la2 = lat2.to_radians();
     let dlat = (lat2 - lat1).to_radians();
     let dlon = (lon2 - lon1).to_radians();
-    let a = (dlat / 2.0).sin().powi(2)
-        + la1.cos() * la2.cos() * (dlon / 2.0).sin().powi(2);
+    let a = (dlat / 2.0).sin().powi(2) + la1.cos() * la2.cos() * (dlon / 2.0).sin().powi(2);
     let c = 2.0 * a.sqrt().asin();
     r * c
 }

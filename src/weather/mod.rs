@@ -120,18 +120,18 @@ fn build_url(model: WeatherModel) -> String {
     let mut url = format!(
         "{}?latitude={LAT}&longitude={LON}\
          &timezone={TIMEZONE}\
-         &past_days={PAST_DAYS}&forecast_days={FORECAST_DAYS}"
-    , model.endpoint());
+         &past_days={PAST_DAYS}&forecast_days={FORECAST_DAYS}",
+        model.endpoint()
+    );
 
     if let Some(m) = model.models_param() {
         url.push_str(&format!("&models={m}"));
     }
 
     url.push_str(
-        "&daily=precipitation_sum,rain_sum,precipitation_hours,\
-         precipitation_probability_max,temperature_2m_max,temperature_2m_min,\
-         apparent_temperature_max,wind_speed_10m_max,wind_gusts_10m_max,\
-         weather_code,et0_fao_evapotranspiration",
+        "&daily=precipitation_sum,precipitation_probability_max,\
+         temperature_2m_max,temperature_2m_min,apparent_temperature_max,\
+         wind_speed_10m_max,wind_gusts_10m_max,et0_fao_evapotranspiration",
     );
     url.push_str("&hourly=precipitation");
     url.push_str("&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch");

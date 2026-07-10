@@ -148,7 +148,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
 
     // Timing: best near ideal_hours_since_rain, fades to 0 at pack_fade_hours.
     let timing_q = match effective_hours {
-        None => 0.15, // long dry spell / never — soft sand baseline
+        None => 0.15,               // long dry spell / never — soft sand baseline
         Some(h) if h < 6.0 => 0.35, // still very fresh / maybe wet
         Some(h) => {
             let peak = p.ideal_hours_since_rain;
@@ -193,7 +193,10 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     } else if antecedent > p.max_useful_rain_in {
         format!("{antecedent:.2} in prior rain (heavy — may stay soft/puddled)")
     } else {
-        format!("{antecedent:.2} in rain in prior ~{:.0}h", p.pack_lookback_hours)
+        format!(
+            "{antecedent:.2} in rain in prior ~{:.0}h",
+            p.pack_lookback_hours
+        )
     };
 
     let wet_note = if day.precip_am_in > p.ride_day_precip_soft {
@@ -369,12 +372,7 @@ fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
 /// Mean ET0 above the reference dries faster (>1, up to 1+modulation); below
 /// reference (cloudy) dries slower (<1, down to 1-modulation). Returns 1.0 when
 /// there is no rain reference or no ET0 data.
-fn drying_factor(
-    days: &[DayWeather],
-    idx: usize,
-    hours_since: Option<f64>,
-    p: &Params,
-) -> f64 {
+fn drying_factor(days: &[DayWeather], idx: usize, hours_since: Option<f64>, p: &Params) -> f64 {
     let Some(h) = hours_since else {
         return 1.0;
     };
