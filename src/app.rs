@@ -193,7 +193,7 @@ fn ReadyView(
         <Timeline days=days_list view_start=view_start selected=selected />
         <footer class="footer">
             <p>
-                "Heuristic for sandy dune trails that pack firm after rain. "
+                "Forecasts the best days for riding Camp Murphy sand. "
                 "Not trail status - ride at your own judgment."
             </p>
             <p>

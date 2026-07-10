@@ -1,4 +1,4 @@
-//! jaycast — rideability forecasts for sandy dune MTB trails
+//! jaycast — forecast the best days for riding Camp Murphy
 
 mod app;
 mod score;

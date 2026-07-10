@@ -3,7 +3,7 @@ name = "jaycast"
 version = "0.2.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-description = "Rideability forecasts for sandy dune MTB trails that pack firm after rain"
+description = "Forecast the best days for riding Camp Murphy's sandy MTB trails at Jonathan Dickinson State Park, FL"
 repository = "https://github.com/j33433/jaycast"
 
 [lib]
