@@ -3,6 +3,9 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::score::{score_color, score_days, DayForecast, Params};
+use crate::theme::{
+    apply_theme, apply_theme_color, detect_os_theme, load_theme_pref, save_theme_pref, Theme,
+};
 use crate::weather::{self, WeatherModel, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS};
 
 #[derive(Clone)]
@@ -21,8 +24,15 @@ pub fn App() -> impl IntoView {
     let model = RwSignal::new(weather::load_model_pref());
     let grid_lat = RwSignal::new(0.0f64);
     let grid_lon = RwSignal::new(0.0f64);
+    let theme = RwSignal::new(load_theme_pref().unwrap_or_else(detect_os_theme));
 
     let is_first_load = RwSignal::new(true);
+
+    Effect::new(move |_| {
+        let t = theme.get();
+        apply_theme(t);
+        apply_theme_color(t);
+    });
 
     let load = move || {
         let m = model.get_untracked();
@@ -120,6 +130,7 @@ pub fn App() -> impl IntoView {
                         model=model
                         grid_lat=grid_lat
                         grid_lon=grid_lon
+                        theme=theme
                         on_switch=Callback::new(switch_model)
                     />
                 }.into_any(),
@@ -161,6 +172,7 @@ fn ReadyView(
     model: RwSignal<WeatherModel>,
     grid_lat: RwSignal<f64>,
     grid_lon: RwSignal<f64>,
+    theme: RwSignal<Theme>,
     on_switch: Callback<WeatherModel>,
 ) -> impl IntoView {
     let days_hero = days.clone();
@@ -174,6 +186,7 @@ fn ReadyView(
             model=model
             grid_lat=grid_lat
             grid_lon=grid_lon
+            theme=theme
             on_switch=on_switch
         />
         <TimelineNav days=days_nav view_start=view_start selected=selected />
@@ -211,6 +224,7 @@ fn Hero(
     model: RwSignal<WeatherModel>,
     grid_lat: RwSignal<f64>,
     grid_lon: RwSignal<f64>,
+    theme: RwSignal<Theme>,
     on_switch: Callback<WeatherModel>,
 ) -> impl IntoView {
     let best = days.iter().find(|d| d.best).cloned();
@@ -220,32 +234,88 @@ fn Hero(
             <div class="hero-top-bar">
                 <p class="label">"Best ride window"</p>
                 <div class="hero-toggle">
-                    <div class="model-toggle">
+                    <div class="hero-controls">
+                        <div class="model-toggle">
+                            <button
+                                type="button"
+                                class=move || {
+                                    if model.get() == WeatherModel::GfsSeamless {
+                                        "model-btn active"
+                                    } else {
+                                        "model-btn"
+                                    }
+                                }
+                                on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
+                            >
+                                "GFS"
+                            </button>
+                            <button
+                                type="button"
+                                class=move || {
+                                    if model.get() == WeatherModel::Ecmwf {
+                                        "model-btn active"
+                                    } else {
+                                        "model-btn"
+                                    }
+                                }
+                                on:click=move |_| on_switch.run(WeatherModel::Ecmwf)
+                            >
+                                "ECMWF"
+                            </button>
+                        </div>
                         <button
                             type="button"
-                            class=move || {
-                                if model.get() == WeatherModel::GfsSeamless {
-                                    "model-btn active"
+                            class="theme-toggle"
+                            aria-label=move || {
+                                if theme.get() == Theme::Dark {
+                                    "Switch to light theme"
                                 } else {
-                                    "model-btn"
+                                    "Switch to dark theme"
                                 }
                             }
-                            on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
-                        >
-                            "GFS"
-                        </button>
-                        <button
-                            type="button"
-                            class=move || {
-                                if model.get() == WeatherModel::Ecmwf {
-                                    "model-btn active"
+                            title=move || {
+                                if theme.get() == Theme::Dark {
+                                    "Light theme"
                                 } else {
-                                    "model-btn"
+                                    "Dark theme"
                                 }
                             }
-                            on:click=move |_| on_switch.run(WeatherModel::Ecmwf)
+                            on:click=move |_| {
+                                let next = theme.get_untracked().toggle();
+                                save_theme_pref(next);
+                                theme.set(next);
+                            }
                         >
-                            "ECMWF"
+                            {move || {
+                                if theme.get() == Theme::Dark {
+                                    // Sun icon: switch to light
+                                    view! {
+                                        <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                            <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                                            <g stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+                                                <line x1="12" y1="2.5" x2="12" y2="5"/>
+                                                <line x1="12" y1="19" x2="12" y2="21.5"/>
+                                                <line x1="2.5" y1="12" x2="5" y2="12"/>
+                                                <line x1="19" y1="12" x2="21.5" y2="12"/>
+                                                <line x1="5.05" y1="5.05" x2="6.8" y2="6.8"/>
+                                                <line x1="17.2" y1="17.2" x2="18.95" y2="18.95"/>
+                                                <line x1="5.05" y1="18.95" x2="6.8" y2="17.2"/>
+                                                <line x1="17.2" y1="6.8" x2="18.95" y2="5.05"/>
+                                            </g>
+                                        </svg>
+                                    }.into_any()
+                                } else {
+                                    // Thick crescent moon: switch to dark
+                                    view! {
+                                        <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path
+                                                fill="currentColor"
+                                                d="M21 14.5A9 9 0 0 1 9.5 3 7.2 7.2 0 1 0 21 14.5z"
+                                            />
+                                        </svg>
+                                    }.into_any()
+                                }
+                            }}
                         </button>
                     </div>
                     <p class="hero-distance">

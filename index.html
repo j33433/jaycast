@@ -9,6 +9,18 @@
       content="Rideability forecasts for Camp Murphy MTB Trails at Jonathan Dickinson State Park, Florida. Scores sandy scrub trails that pack firm after rain. Browser-side forecast, no account required."
     />
     <meta name="theme-color" content="#1a1712" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("jaycast:theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.setAttribute("data-theme", t);
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute("content", t === "light" ? "#f3ebe0" : "#1a1712");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="canonical" href="https://upload.bike/jaycast/" />
 
     <meta property="og:type" content="website" />

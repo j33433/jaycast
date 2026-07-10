@@ -1,6 +1,15 @@
 /* jaycast — Florida scrub palette (sand, saw palmetto, scrub-jay blue) */
 
+/* Shared non-palette tokens */
 :root {
+  --radius: 12px;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+}
+
+/* Dark palette (default + explicit override) */
+:root,
+:root[data-theme="dark"] {
   /* Dusk over the dunes */
   --bg: #1a1712;
   --bg-elev: #262118;
@@ -26,9 +35,6 @@
   --star: #e8c96a;
   --star-empty: #4a4030;
   --rain: var(--jay-soft);
-  --radius: 12px;
-  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   --dune-glow: radial-gradient(
     ellipse 120% 80% at 50% -20%,
@@ -38,9 +44,41 @@
   --btn-text: #0e1a22;
 }
 
+/* Light palette: OS preference when no override, or explicit light */
+:root[data-theme="light"] {
+  /* Midday scrub: bright sand, open sky */
+  --bg: #f3ebe0;
+  --bg-elev: #fffaf3;
+  --bg-card: #fffaf3;
+  --border: #d4c4a8;
+  --text: #2a2418;
+  --text-muted: #6b5e48;
+  --jay: #2f7eb0;
+  --jay-deep: #24648c;
+  --jay-soft: #4a9fd4;
+  --scrub: #4f7340;
+  --scrub-dim: #3d5a32;
+  --sand: #b8956a;
+  --sand-hot: #c9a87a;
+  --accent: var(--jay);
+  --accent-dim: var(--jay-deep);
+  --warn: #b8862e;
+  --bad: #b05048;
+  --good: var(--scrub);
+  --star: #c9a227;
+  --star-empty: #d4c8b0;
+  --rain: var(--jay-deep);
+  --shadow: 0 2px 14px rgba(80, 60, 30, 0.1);
+  --dune-glow: radial-gradient(
+    ellipse 120% 80% at 50% -20%,
+    rgba(74, 159, 212, 0.1) 0%,
+    transparent 50%
+  );
+  --btn-text: #f7fbfe;
+}
+
 @media (prefers-color-scheme: light) {
-  :root {
-    /* Midday scrub: bright sand, open sky */
+  :root:not([data-theme]) {
     --bg: #f3ebe0;
     --bg-elev: #fffaf3;
     --bg-card: #fffaf3;
@@ -221,21 +259,33 @@ body {
   gap: 0.4rem;
 }
 
+.hero-controls {
+  --control-h: calc(0.72rem * 1.2 + 0.6rem + 2px);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* Segmented model switch */
 .hero-toggle .model-toggle {
   gap: 0;
+  height: var(--control-h);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
   background: color-mix(in srgb, var(--bg) 40%, transparent);
+  box-sizing: border-box;
 }
 
 .hero-toggle .model-btn {
   font-size: 0.72rem;
+  line-height: 1.2;
   padding: 0.3rem 0.6rem;
   border: 0;
   border-radius: 0;
   background: transparent;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .hero-toggle .model-btn + .model-btn {
@@ -244,6 +294,36 @@ body {
 
 .hero-toggle .model-btn.active {
   background: color-mix(in srgb, var(--jay) 18%, transparent);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.theme-toggle:hover {
+  border-color: var(--jay);
+  color: var(--jay);
+  background: color-mix(in srgb, var(--jay) 12%, transparent);
+}
+
+.theme-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  display: block;
 }
 
 .hero-toggle .hero-distance {
@@ -255,8 +335,12 @@ body {
   line-height: 1;
 }
 
+:root[data-theme="light"] .hero .label {
+  color: var(--jay-deep);
+}
+
 @media (prefers-color-scheme: light) {
-  .hero .label {
+  :root:not([data-theme]) .hero .label {
     color: var(--jay-deep);
   }
 }

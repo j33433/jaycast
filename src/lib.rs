@@ -2,6 +2,7 @@
 
 mod app;
 mod score;
+mod theme;
 mod weather;
 
 use leptos::prelude::*;
