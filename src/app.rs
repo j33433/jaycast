@@ -469,6 +469,8 @@ fn Timeline(
                         let blurb = d.blurb.clone();
                         let precip = format!("{:.2}\"", d.precip_in);
                         let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
+                        let rain_path = rain_wave_path(d.precip_am_in, d.precip_pm_in);
+                        let cloud_path = cloud_wave_path(d.cloud_am_pct, d.cloud_pm_pct);
                         let date_s = format_short(date);
                         let tint = score_style(d.score);
                         let detail = d.clone();
@@ -511,6 +513,24 @@ fn Timeline(
                                         }
                                     }
                                 >
+                                    <svg
+                                        class="cloud-wave"
+                                        viewBox="0 0 100 100"
+                                        preserveAspectRatio="none"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                    >
+                                        <path d=cloud_path />
+                                    </svg>
+                                    <svg
+                                        class="rain-wave"
+                                        viewBox="0 0 100 100"
+                                        preserveAspectRatio="none"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                    >
+                                        <path d=rain_path />
+                                    </svg>
                                     <div class="date">
                                         {date_s}
                                         <span class="dow">{dow}</span>
@@ -592,6 +612,23 @@ fn stars_str(n: f64) -> String {
 
 fn score_style(score: f64) -> String {
     format!("--score-color: {}", score_color(score))
+}
+
+fn rain_wave_path(morning_in: f64, evening_in: f64) -> String {
+    fn height(inches: f64) -> f64 {
+        // A quarter inch fills the full visual range; greater amounts stay calm.
+        (inches.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0
+    }
+
+    let left = 100.0 - height(morning_in);
+    let right = 100.0 - height(evening_in);
+    format!("M 0 {left:.1} C 30 {left:.1}, 70 {right:.1}, 100 {right:.1} L 100 100 L 0 100 Z")
+}
+
+fn cloud_wave_path(morning_pct: f64, evening_pct: f64) -> String {
+    let left = (morning_pct.clamp(0.0, 100.0) / 100.0) * 52.0;
+    let right = (evening_pct.clamp(0.0, 100.0) / 100.0) * 52.0;
+    format!("M 0 0 L 100 0 L 100 {right:.1} C 70 {right:.1}, 30 {left:.1}, 0 {left:.1} Z")
 }
 
 fn format_long(d: NaiveDate) -> String {

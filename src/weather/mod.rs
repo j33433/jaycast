@@ -61,8 +61,8 @@ impl WeatherModel {
 
     fn cache_key(self) -> &'static str {
         match self {
-            WeatherModel::GfsSeamless => "jaycast:om:v6-gfs",
-            WeatherModel::Ecmwf => "jaycast:om:v6-ecmwf",
+            WeatherModel::GfsSeamless => "jaycast:om:v7-gfs",
+            WeatherModel::Ecmwf => "jaycast:om:v7-ecmwf",
         }
     }
 }
@@ -133,7 +133,7 @@ fn build_url(model: WeatherModel) -> String {
          temperature_2m_max,temperature_2m_min,apparent_temperature_max,\
          wind_speed_10m_max,wind_gusts_10m_max,et0_fao_evapotranspiration",
     );
-    url.push_str("&hourly=precipitation");
+    url.push_str("&hourly=precipitation,cloud_cover");
     url.push_str("&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch");
     url
 }

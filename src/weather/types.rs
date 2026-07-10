@@ -29,6 +29,7 @@ pub struct DailyBlock {
 pub struct HourlyBlock {
     pub time: Vec<String>,
     pub precipitation: Vec<Option<f64>>,
+    pub cloud_cover: Vec<Option<f64>>,
 }
 
 /// One calendar day of inputs used by the scorer.
@@ -49,6 +50,10 @@ pub struct DayWeather {
     pub precip_am_in: f64,
     /// Precip falling in the afternoon (noon local onward), inches.
     pub precip_pm_in: f64,
+    /// Average cloud cover before noon local, as a percentage.
+    pub cloud_am_pct: f64,
+    /// Average cloud cover from noon onward, as a percentage.
+    pub cloud_pm_pct: f64,
 }
 
 impl ForecastResponse {
@@ -63,6 +68,7 @@ impl ForecastResponse {
             };
 
             let (precip_am_in, precip_pm_in) = self.precip_split_for_date(&self.daily.time[i]);
+            let (cloud_am_pct, cloud_pm_pct) = self.cloud_split_for_date(&self.daily.time[i]);
 
             out.push(DayWeather {
                 date,
@@ -76,6 +82,8 @@ impl ForecastResponse {
                 et0: opt(self.daily.et0_fao_evapotranspiration.get(i)),
                 precip_am_in,
                 precip_pm_in,
+                cloud_am_pct,
+                cloud_pm_pct,
             });
         }
 
@@ -107,6 +115,46 @@ impl ForecastResponse {
         }
 
         (am, pm)
+    }
+
+    /// Average hourly cloud cover for a date into (morning, afternoon) percentages.
+    fn cloud_split_for_date(&self, date_str: &str) -> (f64, f64) {
+        let Some(hourly) = self.hourly.as_ref() else {
+            return (0.0, 0.0);
+        };
+        let mut am_total = 0.0;
+        let mut pm_total = 0.0;
+        let mut am_count = 0u32;
+        let mut pm_count = 0u32;
+
+        for (i, t) in hourly.time.iter().enumerate() {
+            if !t.starts_with(date_str) {
+                continue;
+            }
+            let Some(cloud_cover) = hourly.cloud_cover.get(i).and_then(|v| *v) else {
+                continue;
+            };
+            match hour_of(t) {
+                Some(h) if h < AM_RAIN_CUTOFF_HOUR => {
+                    am_total += cloud_cover;
+                    am_count += 1;
+                }
+                Some(_) => {
+                    pm_total += cloud_cover;
+                    pm_count += 1;
+                }
+                None => {}
+            }
+        }
+
+        let average = |total: f64, count: u32| {
+            if count == 0 {
+                0.0
+            } else {
+                total / f64::from(count)
+            }
+        };
+        (average(am_total, am_count), average(pm_total, pm_count))
     }
 }
 
