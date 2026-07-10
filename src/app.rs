@@ -187,7 +187,7 @@ fn ReadyView(
                 <a href="https://github.com/j33433/jaycast" target="_blank" rel="noopener">
                     "GitHub"
                 </a>
-                " · v0.1.0 · "
+                {concat!(" · v", env!("CARGO_PKG_VERSION"), " · ")}
                 <a href="mailto:upload.bike@gmail.com">"upload.bike@gmail.com"</a>
                 " · "
                 <a href="LICENSE" target="_blank" rel="noopener">
