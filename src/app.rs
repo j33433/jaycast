@@ -257,9 +257,9 @@ fn Hero(
                             );
                             let mi = km * 0.621371;
                             if mi < 0.1 {
-                                "grid at trailhead".to_string()
+                                "forecast at trailhead".to_string()
                             } else {
-                                format!("forecast {mi:.1} mi from trailhead")
+                                format!("forecast {mi:.1} miles away")
                             }
                         }}
                     </p>
