@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 /// Local hour (0-23) that splits morning rain (penalized) from afternoon.
 const AM_RAIN_CUTOFF_HOUR: u32 = 12;
+const THREE_HOUR_BUCKETS: usize = 8;
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
 pub struct ForecastResponse {
@@ -50,10 +51,10 @@ pub struct DayWeather {
     pub precip_am_in: f64,
     /// Precip falling in the afternoon (noon local onward), inches.
     pub precip_pm_in: f64,
-    /// Average cloud cover before noon local, as a percentage.
-    pub cloud_am_pct: f64,
-    /// Average cloud cover from noon onward, as a percentage.
-    pub cloud_pm_pct: f64,
+    /// Rainfall in each three-hour period, from midnight through 9 PM.
+    pub precip_3h_in: [f64; THREE_HOUR_BUCKETS],
+    /// Average cloud cover in each three-hour period, from midnight through 9 PM.
+    pub cloud_3h_pct: [f64; THREE_HOUR_BUCKETS],
 }
 
 impl ForecastResponse {
@@ -68,7 +69,8 @@ impl ForecastResponse {
             };
 
             let (precip_am_in, precip_pm_in) = self.precip_split_for_date(&self.daily.time[i]);
-            let (cloud_am_pct, cloud_pm_pct) = self.cloud_split_for_date(&self.daily.time[i]);
+            let (precip_3h_in, cloud_3h_pct) =
+                self.three_hour_weather_for_date(&self.daily.time[i]);
 
             out.push(DayWeather {
                 date,
@@ -82,8 +84,8 @@ impl ForecastResponse {
                 et0: opt(self.daily.et0_fao_evapotranspiration.get(i)),
                 precip_am_in,
                 precip_pm_in,
-                cloud_am_pct,
-                cloud_pm_pct,
+                precip_3h_in,
+                cloud_3h_pct,
             });
         }
 
@@ -117,44 +119,44 @@ impl ForecastResponse {
         (am, pm)
     }
 
-    /// Average hourly cloud cover for a date into (morning, afternoon) percentages.
-    fn cloud_split_for_date(&self, date_str: &str) -> (f64, f64) {
+    /// Summarize each three-hour period for the timeline background curves.
+    fn three_hour_weather_for_date(
+        &self,
+        date_str: &str,
+    ) -> ([f64; THREE_HOUR_BUCKETS], [f64; THREE_HOUR_BUCKETS]) {
         let Some(hourly) = self.hourly.as_ref() else {
-            return (0.0, 0.0);
+            return ([0.0; THREE_HOUR_BUCKETS], [0.0; THREE_HOUR_BUCKETS]);
         };
-        let mut am_total = 0.0;
-        let mut pm_total = 0.0;
-        let mut am_count = 0u32;
-        let mut pm_count = 0u32;
+        let mut rain = [0.0; THREE_HOUR_BUCKETS];
+        let mut cloud_total = [0.0; THREE_HOUR_BUCKETS];
+        let mut cloud_count = [0u32; THREE_HOUR_BUCKETS];
 
         for (i, t) in hourly.time.iter().enumerate() {
             if !t.starts_with(date_str) {
                 continue;
             }
-            let Some(cloud_cover) = hourly.cloud_cover.get(i).and_then(|v| *v) else {
+            let Some(hour) = hour_of(t) else {
                 continue;
             };
-            match hour_of(t) {
-                Some(h) if h < AM_RAIN_CUTOFF_HOUR => {
-                    am_total += cloud_cover;
-                    am_count += 1;
-                }
-                Some(_) => {
-                    pm_total += cloud_cover;
-                    pm_count += 1;
-                }
-                None => {}
+            let bucket = (hour / 3) as usize;
+            if bucket >= THREE_HOUR_BUCKETS {
+                continue;
+            }
+
+            rain[bucket] += hourly.precipitation.get(i).and_then(|v| *v).unwrap_or(0.0);
+            if let Some(cloud_cover) = hourly.cloud_cover.get(i).and_then(|v| *v) {
+                cloud_total[bucket] += cloud_cover;
+                cloud_count[bucket] += 1;
             }
         }
 
-        let average = |total: f64, count: u32| {
-            if count == 0 {
-                0.0
-            } else {
-                total / f64::from(count)
+        let mut cloud = [0.0; THREE_HOUR_BUCKETS];
+        for bucket in 0..THREE_HOUR_BUCKETS {
+            if cloud_count[bucket] > 0 {
+                cloud[bucket] = cloud_total[bucket] / f64::from(cloud_count[bucket]);
             }
-        };
-        (average(am_total, am_count), average(pm_total, pm_count))
+        }
+        (rain, cloud)
     }
 }
 

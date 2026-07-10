@@ -469,8 +469,8 @@ fn Timeline(
                         let blurb = d.blurb.clone();
                         let precip = format!("{:.2}\"", d.precip_in);
                         let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
-                        let rain_path = rain_wave_path(d.precip_am_in, d.precip_pm_in);
-                        let cloud_path = cloud_wave_path(d.cloud_am_pct, d.cloud_pm_pct);
+                        let rain_path = rain_wave_path(&d.precip_3h_in);
+                        let cloud_path = cloud_wave_path(&d.cloud_3h_pct);
                         let date_s = format_short(date);
                         let tint = score_style(d.score);
                         let detail = d.clone();
@@ -614,21 +614,56 @@ fn score_style(score: f64) -> String {
     format!("--score-color: {}", score_color(score))
 }
 
-fn rain_wave_path(morning_in: f64, evening_in: f64) -> String {
-    fn height(inches: f64) -> f64 {
-        // A quarter inch fills the full visual range; greater amounts stay calm.
-        (inches.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0
-    }
-
-    let left = 100.0 - height(morning_in);
-    let right = 100.0 - height(evening_in);
-    format!("M 0 {left:.1} C 30 {left:.1}, 70 {right:.1}, 100 {right:.1} L 100 100 L 0 100 Z")
+fn rain_wave_path(rain_3h_in: &[f64]) -> String {
+    let curve = smooth_wave_path(rain_3h_in, |inches| {
+        // A quarter inch in a three-hour period fills the full visual range.
+        100.0 - (inches.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0
+    });
+    format!("{curve} L 100 100 L 0 100 Z")
 }
 
-fn cloud_wave_path(morning_pct: f64, evening_pct: f64) -> String {
-    let left = (morning_pct.clamp(0.0, 100.0) / 100.0) * 52.0;
-    let right = (evening_pct.clamp(0.0, 100.0) / 100.0) * 52.0;
-    format!("M 0 0 L 100 0 L 100 {right:.1} C 70 {right:.1}, 30 {left:.1}, 0 {left:.1} Z")
+fn cloud_wave_path(cloud_3h_pct: &[f64]) -> String {
+    let curve = smooth_wave_path(cloud_3h_pct, |pct| (pct.clamp(0.0, 100.0) / 100.0) * 52.0);
+    format!("{curve} L 100 0 L 0 0 Z")
+}
+
+fn smooth_wave_path(values: &[f64], height: impl Fn(f64) -> f64) -> String {
+    let points: Vec<_> = values
+        .iter()
+        .enumerate()
+        .map(|(i, value)| {
+            let x = if values.len() > 1 {
+                i as f64 * 100.0 / (values.len() - 1) as f64
+            } else {
+                0.0
+            };
+            (x, height(*value).clamp(0.0, 100.0))
+        })
+        .collect();
+    let Some(&(first_x, first_y)) = points.first() else {
+        return "M 0 100".to_string();
+    };
+
+    let mut path = format!("M {first_x:.1} {first_y:.1}");
+    for i in 0..points.len().saturating_sub(1) {
+        let previous = points[i.saturating_sub(1)];
+        let current = points[i];
+        let next = points[i + 1];
+        let following = points[(i + 2).min(points.len() - 1)];
+        let control_1 = (
+            current.0 + (next.0 - previous.0) / 6.0,
+            (current.1 + (next.1 - previous.1) / 6.0).clamp(0.0, 100.0),
+        );
+        let control_2 = (
+            next.0 - (following.0 - current.0) / 6.0,
+            (next.1 - (following.1 - current.1) / 6.0).clamp(0.0, 100.0),
+        );
+        path.push_str(&format!(
+            " C {0:.1} {1:.1}, {2:.1} {3:.1}, {4:.1} {5:.1}",
+            control_1.0, control_1.1, control_2.0, control_2.1, next.0, next.1
+        ));
+    }
+    path
 }
 
 fn format_long(d: NaiveDate) -> String {

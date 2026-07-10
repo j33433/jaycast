@@ -16,7 +16,7 @@ Sandy, lightly shaded trails firm up after rain, then dry quickly under sun. Ide
 2. Dry morning for the ride (afternoon storms are fine; the sand drains fast)
 3. Comfortable temperature and a light breeze
 
-Each day in a **30-day archive + 10-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top: morning is on the left, afternoon/evening is on the right. Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
+Each day in a **30-day archive + 10-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top in three-hour periods, from midnight on the left through late evening on the right. Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
 
 ## Develop
 

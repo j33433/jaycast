@@ -28,10 +28,8 @@ pub struct DayForecast {
     pub is_past: bool,
     pub is_today: bool,
     pub precip_in: f64,
-    pub precip_am_in: f64,
-    pub precip_pm_in: f64,
-    pub cloud_am_pct: f64,
-    pub cloud_pm_pct: f64,
+    pub precip_3h_in: [f64; 8],
+    pub cloud_3h_pct: [f64; 8],
     pub temp_max_f: f64,
     pub temp_min_f: f64,
     pub precip_prob_max: f64,
@@ -114,10 +112,8 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
         is_past: day.date < today,
         is_today: day.date == today,
         precip_in: day.precip_in,
-        precip_am_in: day.precip_am_in,
-        precip_pm_in: day.precip_pm_in,
-        cloud_am_pct: day.cloud_am_pct,
-        cloud_pm_pct: day.cloud_pm_pct,
+        precip_3h_in: day.precip_3h_in,
+        cloud_3h_pct: day.cloud_3h_pct,
         temp_max_f: day.temp_max_f,
         temp_min_f: day.temp_min_f,
         precip_prob_max: day.precip_prob_max,
@@ -486,8 +482,8 @@ mod tests {
             // Assume rain falls in the afternoon by default (convective FL storms).
             precip_am_in: 0.0,
             precip_pm_in: precip,
-            cloud_am_pct: 0.0,
-            cloud_pm_pct: 0.0,
+            precip_3h_in: [0.0; 8],
+            cloud_3h_pct: [0.0; 8],
         }
     }
 
