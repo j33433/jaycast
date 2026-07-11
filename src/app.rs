@@ -62,7 +62,8 @@ pub fn App() -> impl IntoView {
                                 .unwrap_or(0);
 
                             if first {
-                                view_start.set(today_idx);
+                                // Open on yesterday so the completed day sits above today.
+                                view_start.set(today_idx.saturating_sub(1));
                             }
 
                             let prev_sel = selected.get_untracked();
@@ -437,7 +438,7 @@ fn TimelineNav(
                     type="button"
                     class="nav-today"
                     on:click=move |_| {
-                        view_start.set(today_idx.min(max_start));
+                        view_start.set(today_idx.saturating_sub(1).min(max_start));
                         if let Some(d) = days.get(today_idx) {
                             selected.set(Some(d.date));
                         }
@@ -493,6 +494,8 @@ fn Timeline(
                         let detail = d.clone();
                         let dow = if is_today {
                             "Today".to_string()
+                        } else if date == Local::now().date_naive() - Duration::days(1) {
+                            "Yesterday".to_string()
                         } else if is_past {
                             format!("{} · past", format_dow(date))
                         } else {

@@ -168,8 +168,9 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     };
 
     // Rain during the ride. Wet ground is fine here (drains fast), so only rain
-    // actually falling between 8 AM and noon is penalized; afternoon rain is
-    // nearly ignored.
+    // actually falling between 8 AM and noon is heavily penalized. Afternoon rain
+    // while the park is open (until sundown) is lightly weighted; rain after close
+    // is ignored.
     let ride_rain = day.precip_ride_in + day.precip_pm_in * 0.15;
     let wet_q = if ride_rain <= p.ride_day_precip_soft {
         1.0 - (day.precip_prob_max / 100.0) * 0.1
@@ -209,7 +210,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         )
     } else if day.precip_pm_in > p.ride_day_precip_soft {
         format!(
-            "{:.2} in afternoon rain — dry 8 AM-noon window",
+            "{:.2} in rain noon-sundown — dry 8 AM-noon window",
             day.precip_pm_in
         )
     } else if day.precip_prob_max >= 40.0 {
@@ -343,11 +344,11 @@ fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
     }
 
     let days_out = (date - today).num_days().max(0) as f64;
-    // Full confidence today–day 3, then taper to ~0.45 by day 10.
+    // Full confidence today–day 3, then taper to ~0.45 by day 7.
     let q = if days_out <= 3.0 {
         1.0
     } else {
-        lerp(1.0, 0.45, ((days_out - 3.0) / 7.0).clamp(0.0, 1.0))
+        lerp(1.0, 0.45, ((days_out - 3.0) / 4.0).clamp(0.0, 1.0))
     };
 
     let note = if days_out == 0.0 {

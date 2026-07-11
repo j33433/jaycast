@@ -13,10 +13,10 @@ Browser-only (Rust → WASM via Leptos). Weather from [Open-Meteo](https://open-
 Sandy, lightly shaded trails firm up after rain, then dry quickly under sun. Ideal ride window:
 
 1. Meaningful rain in the prior ~1–3 days
-2. Dry 8 AM-noon ride window (afternoon storms are fine; the sand drains fast)
+2. Dry 8 AM-noon ride window (afternoon storms before sundown are lightly weighted; the park closes at sundown)
 3. Comfortable temperature and a light breeze
 
-Each day in a **30-day archive + 10-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top in three-hour periods, from midnight on the left through late evening on the right. Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
+Each day in a **30-day archive + 7-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. The default timeline shows yesterday, today, and the next 7 days. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top in three-hour periods, from midnight on the left through late evening on the right. Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
 
 ## Develop
 
@@ -38,9 +38,9 @@ Heuristic weights (see `src/score/params.rs` and `src/score/heuristic.rs`):
 
 | Factor | Role |
 |--------|------|
-| Prior rain | Antecedent precip over ~72h; sweet spot ~0.35–3.0 in, ideal ~1.0 in |
-| Pack timing | Best ~24h after a solid rain day; fades over ~5 dry days. ET0 (sun) speeds drying; cloud slows it |
-| Rain during ride | Rain from 8 AM-noon is penalized; overnight and afternoon rain are mostly ignored |
+| Prior rain | Antecedent precip over ~48h; sweet spot ~0.35–3.0 in, ideal ~1.0 in |
+| Pack timing | Best ~18h after a solid rain day; fades over ~3 dry days. ET0 (sun) speeds drying; cloud slows it |
+| Rain during ride | Rain from 8 AM-noon is penalized; noon-sundown is light; overnight and after-close rain are ignored |
 | Temperature | Florida MTB comfort band, with heat-index ding |
 | Wind | Ideal light breeze ~5–12 mph; dead calm and gales both ding |
 | Forecast confidence | Tapers for farther days |

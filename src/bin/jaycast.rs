@@ -152,7 +152,7 @@ fn print_analysis(
 ) {
     println!("{date} | {source} | grid {latitude:.3}, {longitude:.3}");
     println!(
-        "  score {:.1} stars ({:.0}%) | rain {:.2}\" total, {:.2}\" 8 AM-noon, {:.2}\" afternoon",
+        "  score {:.1} stars ({:.0}%) | rain {:.2}\" total, {:.2}\" 8 AM-noon, {:.2}\" noon-sundown",
         score.stars,
         score.score * 100.0,
         weather.precip_in,

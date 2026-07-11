@@ -51,9 +51,9 @@ impl Default for Params {
             ideal_antecedent_in: 1.0,
             min_useful_rain_in: 0.35,
             max_useful_rain_in: 3.0,
-            pack_lookback_hours: 72.0,
-            ideal_hours_since_rain: 24.0,
-            pack_fade_hours: 120.0, // ~5 days
+            pack_lookback_hours: 48.0,
+            ideal_hours_since_rain: 18.0,
+            pack_fade_hours: 72.0, // ~3 days
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
             et0_dry_ref: 0.20,

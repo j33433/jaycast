@@ -16,10 +16,10 @@ pub const LOCATION_SUB: &str = "Jonathan Dickinson State Park, FL";
 
 /// Past days of history (pack model lookback + browseable archive).
 pub const PAST_DAYS: u32 = 30;
-/// Forecast days to score and display.
-pub const FORECAST_DAYS: u32 = 10;
-/// Days shown in the timeline window at once.
-pub const VIEW_DAYS: usize = 10;
+/// Forecast days to score and display (today + next 7).
+pub const FORECAST_DAYS: u32 = 8;
+/// Days shown in the timeline window at once (yesterday + today + next 7).
+pub const VIEW_DAYS: usize = 9;
 
 const CACHE_TTL_SECS: i64 = 90 * 60; // 1.5 hours
 const MODEL_PREF_KEY: &str = "jaycast:model-pref";

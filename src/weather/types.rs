@@ -3,6 +3,9 @@ use serde::Deserialize;
 /// Camp Murphy opens at 8 AM; rain during this window affects the ride directly.
 const RIDE_START_HOUR: u32 = 8;
 const RIDE_END_HOUR: u32 = 12;
+/// Park closes at sundown. Florida summer sunset is ~8 PM local; hours from this
+/// point onward are after close and do not affect ride-day wetness scoring.
+const PARK_CLOSE_HOUR: u32 = 20;
 const THREE_HOUR_BUCKETS: usize = 8;
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
@@ -50,7 +53,7 @@ pub struct DayWeather {
     pub et0: f64,
     /// Precip falling during the 8 AM-noon ride window, inches.
     pub precip_ride_in: f64,
-    /// Precip falling in the afternoon (noon local onward), inches.
+    /// Precip while the park is still open after noon (noon until sundown), inches.
     pub precip_pm_in: f64,
     /// Rainfall in each three-hour period, from midnight through 9 PM.
     pub precip_3h_in: [f64; THREE_HOUR_BUCKETS],
@@ -93,9 +96,10 @@ impl ForecastResponse {
         out
     }
 
-    /// Sum hourly precip for a date into (ride window, afternoon) inches.
+    /// Sum hourly precip for a date into (morning ride window, open afternoon).
     /// Hourly timestamps are local (timezone param set), so the hour is read
     /// directly from the `THH` portion of the ISO string.
+    /// Rain after park close (sundown) is omitted from both totals.
     fn precip_windows_for_date(&self, date_str: &str) -> (f64, f64) {
         let Some(hourly) = self.hourly.as_ref() else {
             return (0.0, 0.0);
@@ -112,7 +116,7 @@ impl ForecastResponse {
             };
             match hour_of(t) {
                 Some(h) if (RIDE_START_HOUR..RIDE_END_HOUR).contains(&h) => ride += p,
-                Some(h) if h >= RIDE_END_HOUR => pm += p,
+                Some(h) if (RIDE_END_HOUR..PARK_CLOSE_HOUR).contains(&h) => pm += p,
                 Some(_) => {}
                 None => {}
             }
@@ -200,14 +204,24 @@ mod tests {
                     "2026-07-11T08:00".into(),
                     "2026-07-11T11:00".into(),
                     "2026-07-11T12:00".into(),
+                    "2026-07-11T19:00".into(),
+                    "2026-07-11T20:00".into(),
                 ],
-                precipitation: vec![Some(0.20), Some(0.01), Some(0.02), Some(0.04)],
-                cloud_cover: vec![Some(0.0); 4],
+                precipitation: vec![
+                    Some(0.20),
+                    Some(0.01),
+                    Some(0.02),
+                    Some(0.04),
+                    Some(0.05),
+                    Some(0.50),
+                ],
+                cloud_cover: vec![Some(0.0); 6],
             }),
         };
 
         let day = response.days().pop().unwrap();
         assert!((day.precip_ride_in - 0.03).abs() < 1e-9);
-        assert!((day.precip_pm_in - 0.04).abs() < 1e-9);
+        // Noon + 7 PM count; 8 PM is after sundown close and is ignored.
+        assert!((day.precip_pm_in - 0.09).abs() < 1e-9);
     }
 }
