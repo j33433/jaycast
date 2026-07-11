@@ -23,6 +23,7 @@ pub const VIEW_DAYS: usize = 10;
 
 const CACHE_TTL_SECS: i64 = 90 * 60; // 1.5 hours
 const MODEL_PREF_KEY: &str = "jaycast:model-pref";
+const HISTORY_CACHE_KEY: &str = "jaycast:om:v1-history";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WeatherModel {
@@ -61,8 +62,8 @@ impl WeatherModel {
 
     fn cache_key(self) -> &'static str {
         match self {
-            WeatherModel::GfsSeamless => "jaycast:om:v7-gfs",
-            WeatherModel::Ecmwf => "jaycast:om:v7-ecmwf",
+            WeatherModel::GfsSeamless => "jaycast:om:v8-gfs",
+            WeatherModel::Ecmwf => "jaycast:om:v8-ecmwf",
         }
     }
 }
@@ -89,11 +90,14 @@ pub fn save_model_pref(model: WeatherModel) {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct CacheEntry {
     fetched_at: i64,
+    /// Inclusive date range for historical analysis cache entries.
+    start_date: Option<String>,
+    end_date: Option<String>,
     payload: ForecastResponse,
 }
 
 pub async fn fetch_forecast(model: WeatherModel) -> Result<ForecastResponse, String> {
-    if let Some(cached) = load_cache(model) {
+    if let Some(cached) = load_cache(model.cache_key(), None, None) {
         return Ok(cached);
     }
 
@@ -112,7 +116,7 @@ pub async fn fetch_forecast(model: WeatherModel) -> Result<ForecastResponse, Str
         .await
         .map_err(|e| format!("Failed to parse weather data: {e}"))?;
 
-    save_cache(model, &payload);
+    save_cache(model.cache_key(), None, None, &payload);
     Ok(payload)
 }
 
@@ -121,6 +125,12 @@ pub async fn fetch_historical_analysis(
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
 ) -> Result<ForecastResponse, String> {
+    let start_s = start.to_string();
+    let end_s = end.to_string();
+    if let Some(cached) = load_cache(HISTORY_CACHE_KEY, Some(&start_s), Some(&end_s)) {
+        return Ok(cached);
+    }
+
     let resp = Request::get(&build_historical_url(start, end))
         .send()
         .await
@@ -133,9 +143,13 @@ pub async fn fetch_historical_analysis(
         ));
     }
 
-    resp.json()
+    let payload: ForecastResponse = resp
+        .json()
         .await
-        .map_err(|e| format!("Failed to parse historical weather data: {e}"))
+        .map_err(|e| format!("Failed to parse historical weather data: {e}"))?;
+
+    save_cache(HISTORY_CACHE_KEY, Some(&start_s), Some(&end_s), &payload);
+    Ok(payload)
 }
 
 /// Completed days use historical analysis; today and future use the selected forecast model.
@@ -151,10 +165,11 @@ pub fn combine_history_and_forecast(
 }
 
 fn build_url(model: WeatherModel) -> String {
+    // Completed days come from historical analysis, so only future days are needed here.
     let mut url = format!(
         "{}?latitude={LAT}&longitude={LON}\
          &timezone={TIMEZONE}\
-         &past_days={PAST_DAYS}&forecast_days={FORECAST_DAYS}",
+         &past_days=1&forecast_days={FORECAST_DAYS}",
         model.endpoint()
     );
 
@@ -206,33 +221,48 @@ fn append_weather_fields(url: &mut String) {
     url.push_str("&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch");
 }
 
-fn load_cache(model: WeatherModel) -> Option<ForecastResponse> {
+fn load_cache(
+    key: &str,
+    start_date: Option<&str>,
+    end_date: Option<&str>,
+) -> Option<ForecastResponse> {
     let storage = window()?.local_storage().ok()??;
-    let raw = storage.get_item(model.cache_key()).ok()??;
+    let raw = storage.get_item(key).ok()??;
     let entry: CacheEntry = serde_json::from_str(&raw).ok()?;
     let now = chrono::Utc::now().timestamp();
     if now - entry.fetched_at > CACHE_TTL_SECS {
         return None;
     }
+    if entry.start_date.as_deref() != start_date || entry.end_date.as_deref() != end_date {
+        return None;
+    }
     Some(entry.payload)
 }
 
-fn save_cache(model: WeatherModel, payload: &ForecastResponse) {
+fn save_cache(
+    key: &str,
+    start_date: Option<&str>,
+    end_date: Option<&str>,
+    payload: &ForecastResponse,
+) {
     let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) else {
         return;
     };
     let entry = CacheEntry {
         fetched_at: chrono::Utc::now().timestamp(),
+        start_date: start_date.map(str::to_string),
+        end_date: end_date.map(str::to_string),
         payload: payload.clone(),
     };
     if let Ok(raw) = serde_json::to_string(&entry) {
-        let _ = storage.set_item(model.cache_key(), &raw);
+        let _ = storage.set_item(key, &raw);
     }
 }
 
 pub fn clear_cache(model: WeatherModel) {
     if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
         let _ = storage.remove_item(model.cache_key());
+        let _ = storage.remove_item(HISTORY_CACHE_KEY);
     }
 }
 
