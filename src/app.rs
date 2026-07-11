@@ -194,7 +194,7 @@ fn ReadyView(
         <footer class="footer">
             <p>
                 "Forecasts the best days for riding Camp Murphy sand. "
-                "Not trail status - ride at your own judgment."
+                "Not trail status. Use your own judgment."
             </p>
             <p>
                 {move || model.get().label()}
