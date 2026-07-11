@@ -579,9 +579,9 @@ fn Timeline(
 
 fn day_detail_view(d: DayForecast) -> impl IntoView {
     let score_line = format!(
-        "score {:.0}% · {:.0}% rain chance",
+        "score {:.0}% · {:.0}% rain chance 8 AM-noon",
         d.score * 100.0,
-        d.precip_prob_max
+        d.precip_prob_ride_max
     );
     let tint = score_style(d.score);
     view! {

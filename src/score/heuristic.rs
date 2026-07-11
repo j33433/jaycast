@@ -33,6 +33,7 @@ pub struct DayForecast {
     pub temp_max_f: f64,
     pub temp_min_f: f64,
     pub precip_prob_max: f64,
+    pub precip_prob_ride_max: f64,
     pub blurb: String,
 }
 
@@ -116,6 +117,7 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
         temp_max_f: day.temp_max_f,
         temp_min_f: day.temp_min_f,
         precip_prob_max: day.precip_prob_max,
+        precip_prob_ride_max: day.precip_prob_ride_max,
         blurb,
     }
 }
@@ -173,7 +175,8 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     // is ignored.
     let ride_rain = day.precip_ride_in + day.precip_pm_in * 0.15;
     let wet_q = if ride_rain <= p.ride_day_precip_soft {
-        1.0 - (day.precip_prob_max / 100.0) * 0.1
+        // Dry QPF: still ding a little when the morning chance is elevated.
+        1.0 - (day.precip_prob_ride_max / 100.0) * 0.1
     } else if ride_rain >= p.ride_day_precip_hard {
         0.1
     } else {
@@ -206,17 +209,23 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     let wet_note = if day.precip_ride_in > p.ride_day_precip_soft {
         format!(
             "{:.2} in rain from 8 AM-noon ({:.0}% chance) — likely riding wet",
-            day.precip_ride_in, day.precip_prob_max
+            day.precip_ride_in, day.precip_prob_ride_max
         )
     } else if day.precip_pm_in > p.ride_day_precip_soft {
         format!(
-            "{:.2} in rain noon-sundown — dry 8 AM-noon window",
-            day.precip_pm_in
+            "{:.2} in rain noon-sundown — dry 8 AM-noon window ({:.0}% morning chance)",
+            day.precip_pm_in, day.precip_prob_ride_max
         )
-    } else if day.precip_prob_max >= 40.0 {
-        format!("{:.0}% rain chance, mostly dry", day.precip_prob_max)
+    } else if day.precip_prob_ride_max >= 40.0 {
+        format!(
+            "{:.0}% rain chance 8 AM-noon, mostly dry QPF",
+            day.precip_prob_ride_max
+        )
     } else {
-        format!("dry ride window ({:.0}% chance)", day.precip_prob_max)
+        format!(
+            "dry ride window ({:.0}% chance 8 AM-noon)",
+            day.precip_prob_ride_max
+        )
     };
 
     let factors = vec![
@@ -321,7 +330,7 @@ fn weather_quality(day: &DayWeather, p: &Params) -> (f64, Vec<Factor>) {
         },
         Factor {
             name: "Sky",
-            note: format!("{:.0}% max precip probability", day.precip_prob_max),
+            note: format!("{:.0}% daily max precip probability", day.precip_prob_max),
             contribution: sky_q * 2.0 - 1.0,
             quality: sky_q,
         },
@@ -429,7 +438,7 @@ pub fn score_color(score: f64) -> String {
 
 fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor]) -> String {
     if day.precip_in >= 0.25 {
-        return format!("wet day · {:.2} in rain", day.precip_in);
+        return wet_period_blurb(day);
     }
     if pack_q >= 0.7 {
         return "firm sand window".into();
@@ -442,6 +451,34 @@ fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor]) -> String {
         .first()
         .map(|f| f.note.clone())
         .unwrap_or_else(|| format!("high {:.0}°F", day.temp_max_f))
+}
+
+/// Prefer a timed wet label when one part of the day holds most of the rain.
+fn wet_period_blurb(day: &DayWeather) -> String {
+    let morning =
+        day.precip_3h_in[0] + day.precip_3h_in[1] + day.precip_3h_in[2] + day.precip_3h_in[3];
+    let afternoon = day.precip_3h_in[4] + day.precip_3h_in[5];
+    let evening = day.precip_3h_in[6] + day.precip_3h_in[7];
+    let total = morning + afternoon + evening;
+    let period = if total <= 0.0 {
+        "day"
+    } else {
+        let (name, amount) = [
+            ("morning", morning),
+            ("afternoon", afternoon),
+            ("evening", evening),
+        ]
+        .into_iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap_or(("day", 0.0));
+        // Spread across multiple periods stays "wet day".
+        if amount / total >= 0.55 {
+            name
+        } else {
+            "day"
+        }
+    };
+    format!("wet {period} · {:.2} in rain", day.precip_in)
 }
 
 fn trap_score(x: f64, a: f64, b: f64, c: f64, d: f64) -> f64 {
@@ -473,6 +510,7 @@ mod tests {
             date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
             precip_in: precip,
             precip_prob_max: if precip > 0.2 { 70.0 } else { 10.0 },
+            precip_prob_ride_max: if precip > 0.2 { 70.0 } else { 10.0 },
             temp_max_f: high,
             temp_min_f: high - 15.0,
             apparent_max_f: high + 2.0,
@@ -581,6 +619,7 @@ mod tests {
         overnight_rain.precip_ride_in = 0.0;
         overnight_rain.precip_pm_in = 0.0;
         overnight_rain.precip_prob_max = dry_ride.precip_prob_max;
+        overnight_rain.precip_prob_ride_max = dry_ride.precip_prob_ride_max;
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
 
         let dry_score = score_days(&[prior.clone(), dry_ride], today, &Params::default())[1].score;
@@ -600,6 +639,7 @@ mod tests {
         light_rain.precip_ride_in = 0.04;
         light_rain.precip_pm_in = 0.0;
         light_rain.precip_prob_max = dry_ride.precip_prob_max;
+        light_rain.precip_prob_ride_max = dry_ride.precip_prob_ride_max;
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
 
         let dry_score = score_days(&[prior.clone(), dry_ride], today, &Params::default())[1].score;
@@ -663,5 +703,20 @@ mod tests {
         assert!((score_to_stars(0.0) - 1.0).abs() < 1e-9);
         assert!((score_to_stars(0.875) - 4.5).abs() < 1e-9);
         assert!((score_to_stars(0.5) - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wet_blurb_names_the_dominant_period() {
+        let mut evening = day("2026-07-02", 1.0, 88.0);
+        evening.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+        assert_eq!(wet_period_blurb(&evening), "wet evening · 1.00 in rain");
+
+        let mut morning = day("2026-07-02", 0.50, 88.0);
+        morning.precip_3h_in = [0.0, 0.0, 0.40, 0.10, 0.0, 0.0, 0.0, 0.0];
+        assert_eq!(wet_period_blurb(&morning), "wet morning · 0.50 in rain");
+
+        let mut spread = day("2026-07-02", 0.60, 88.0);
+        spread.precip_3h_in = [0.0, 0.0, 0.20, 0.0, 0.20, 0.0, 0.20, 0.0];
+        assert_eq!(wet_period_blurb(&spread), "wet day · 0.60 in rain");
     }
 }

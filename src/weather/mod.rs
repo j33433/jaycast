@@ -62,8 +62,8 @@ impl WeatherModel {
 
     fn cache_key(self) -> &'static str {
         match self {
-            WeatherModel::GfsSeamless => "jaycast:om:v8-gfs",
-            WeatherModel::Ecmwf => "jaycast:om:v8-ecmwf",
+            WeatherModel::GfsSeamless => "jaycast:om:v9-gfs",
+            WeatherModel::Ecmwf => "jaycast:om:v9-ecmwf",
         }
     }
 }
@@ -217,7 +217,7 @@ fn append_weather_fields(url: &mut String) {
          temperature_2m_max,temperature_2m_min,apparent_temperature_max,\
          wind_speed_10m_max,wind_gusts_10m_max,et0_fao_evapotranspiration",
     );
-    url.push_str("&hourly=precipitation,cloud_cover");
+    url.push_str("&hourly=precipitation,precipitation_probability,cloud_cover");
     url.push_str("&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch");
 }
 
@@ -275,6 +275,7 @@ mod tests {
             date: chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
             precip_in,
             precip_prob_max: 0.0,
+            precip_prob_ride_max: 0.0,
             temp_max_f: 0.0,
             temp_min_f: 0.0,
             apparent_max_f: 0.0,

@@ -152,12 +152,14 @@ fn print_analysis(
 ) {
     println!("{date} | {source} | grid {latitude:.3}, {longitude:.3}");
     println!(
-        "  score {:.1} stars ({:.0}%) | rain {:.2}\" total, {:.2}\" 8 AM-noon, {:.2}\" noon-sundown",
+        "  score {:.1} stars ({:.0}%) | rain {:.2}\" total, {:.2}\" 8 AM-noon, {:.2}\" noon-sundown | {:.0}% chance 8 AM-noon (daily max {:.0}%)",
         score.stars,
         score.score * 100.0,
         weather.precip_in,
         weather.precip_ride_in,
         weather.precip_pm_in,
+        weather.precip_prob_ride_max,
+        weather.precip_prob_max,
     );
     println!(
         "  rain by 3h: {}",

@@ -34,6 +34,9 @@ pub struct DailyBlock {
 pub struct HourlyBlock {
     pub time: Vec<String>,
     pub precipitation: Vec<Option<f64>>,
+    /// Missing on some historical analysis series; treat as empty.
+    #[serde(default)]
+    pub precipitation_probability: Vec<Option<f64>>,
     pub cloud_cover: Vec<Option<f64>>,
 }
 
@@ -42,7 +45,10 @@ pub struct HourlyBlock {
 pub struct DayWeather {
     pub date: chrono::NaiveDate,
     pub precip_in: f64,
+    /// Daily maximum precip probability (%).
     pub precip_prob_max: f64,
+    /// Maximum precip probability during the 8 AM-noon ride window (%).
+    pub precip_prob_ride_max: f64,
     pub temp_max_f: f64,
     pub temp_min_f: f64,
     pub apparent_max_f: f64,
@@ -73,13 +79,17 @@ impl ForecastResponse {
             };
 
             let (precip_ride_in, precip_pm_in) = self.precip_windows_for_date(&self.daily.time[i]);
+            let precip_prob_max = opt(self.daily.precipitation_probability_max.get(i));
+            let precip_prob_ride_max =
+                self.prob_ride_max_for_date(&self.daily.time[i], precip_prob_max);
             let (precip_3h_in, cloud_3h_pct) =
                 self.three_hour_weather_for_date(&self.daily.time[i]);
 
             out.push(DayWeather {
                 date,
                 precip_in: opt(self.daily.precipitation_sum.get(i)),
-                precip_prob_max: opt(self.daily.precipitation_probability_max.get(i)),
+                precip_prob_max,
+                precip_prob_ride_max,
                 temp_max_f: opt(self.daily.temperature_2m_max.get(i)),
                 temp_min_f: opt(self.daily.temperature_2m_min.get(i)),
                 apparent_max_f: opt(self.daily.apparent_temperature_max.get(i)),
@@ -123,6 +133,34 @@ impl ForecastResponse {
         }
 
         (ride, pm)
+    }
+
+    /// Max hourly precip probability in the 8 AM-noon ride window.
+    /// Falls back to the daily max when hourly probability is unavailable.
+    fn prob_ride_max_for_date(&self, date_str: &str, daily_fallback: f64) -> f64 {
+        let Some(hourly) = self.hourly.as_ref() else {
+            return daily_fallback;
+        };
+        if hourly.precipitation_probability.is_empty() {
+            return daily_fallback;
+        }
+
+        let mut max_prob = None;
+        for (i, t) in hourly.time.iter().enumerate() {
+            if !t.starts_with(date_str) {
+                continue;
+            }
+            let Some(h) = hour_of(t) else {
+                continue;
+            };
+            if !(RIDE_START_HOUR..RIDE_END_HOUR).contains(&h) {
+                continue;
+            }
+            if let Some(p) = hourly.precipitation_probability.get(i).and_then(|v| *v) {
+                max_prob = Some(max_prob.map_or(p, |m: f64| m.max(p)));
+            }
+        }
+        max_prob.unwrap_or(daily_fallback)
     }
 
     /// Summarize each three-hour period for the timeline background curves.
@@ -215,6 +253,14 @@ mod tests {
                     Some(0.05),
                     Some(0.50),
                 ],
+                precipitation_probability: vec![
+                    Some(10.0),
+                    Some(40.0),
+                    Some(55.0),
+                    Some(80.0),
+                    Some(70.0),
+                    Some(90.0),
+                ],
                 cloud_cover: vec![Some(0.0); 6],
             }),
         };
@@ -223,5 +269,7 @@ mod tests {
         assert!((day.precip_ride_in - 0.03).abs() < 1e-9);
         // Noon + 7 PM count; 8 PM is after sundown close and is ignored.
         assert!((day.precip_pm_in - 0.09).abs() < 1e-9);
+        // Ride-window chance is max of 8 AM and 11 AM, not noon/evening peaks.
+        assert!((day.precip_prob_ride_max - 55.0).abs() < 1e-9);
     }
 }
