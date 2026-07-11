@@ -493,11 +493,11 @@ body {
 }
 
 .rain-wave path {
-  fill: color-mix(in srgb, var(--rain) 7%, transparent);
+  fill: color-mix(in srgb, var(--rain) 10%, transparent);
 }
 
 .cloud-wave path {
-  fill: color-mix(in srgb, #9ca3af 14%, transparent);
+  fill: color-mix(in srgb, #9ca3af 16%, transparent);
 }
 
 .day-card:hover,

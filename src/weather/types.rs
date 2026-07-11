@@ -1,7 +1,8 @@
 use serde::Deserialize;
 
-/// Local hour (0-23) that splits morning rain (penalized) from afternoon.
-const AM_RAIN_CUTOFF_HOUR: u32 = 12;
+/// Camp Murphy opens at 8 AM; rain during this window affects the ride directly.
+const RIDE_START_HOUR: u32 = 8;
+const RIDE_END_HOUR: u32 = 12;
 const THREE_HOUR_BUCKETS: usize = 8;
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
@@ -47,8 +48,8 @@ pub struct DayWeather {
     /// Reference evapotranspiration for the day (inches). Drying-rate proxy:
     /// high under sun, low under cloud.
     pub et0: f64,
-    /// Precip falling in the morning ride window (before noon local), inches.
-    pub precip_am_in: f64,
+    /// Precip falling during the 8 AM-noon ride window, inches.
+    pub precip_ride_in: f64,
     /// Precip falling in the afternoon (noon local onward), inches.
     pub precip_pm_in: f64,
     /// Rainfall in each three-hour period, from midnight through 9 PM.
@@ -68,7 +69,7 @@ impl ForecastResponse {
                 Err(_) => continue,
             };
 
-            let (precip_am_in, precip_pm_in) = self.precip_split_for_date(&self.daily.time[i]);
+            let (precip_ride_in, precip_pm_in) = self.precip_windows_for_date(&self.daily.time[i]);
             let (precip_3h_in, cloud_3h_pct) =
                 self.three_hour_weather_for_date(&self.daily.time[i]);
 
@@ -82,7 +83,7 @@ impl ForecastResponse {
                 wind_max_mph: opt(self.daily.wind_speed_10m_max.get(i)),
                 gust_max_mph: opt(self.daily.wind_gusts_10m_max.get(i)),
                 et0: opt(self.daily.et0_fao_evapotranspiration.get(i)),
-                precip_am_in,
+                precip_ride_in,
                 precip_pm_in,
                 precip_3h_in,
                 cloud_3h_pct,
@@ -92,14 +93,14 @@ impl ForecastResponse {
         out
     }
 
-    /// Sum hourly precip for a date into (morning, afternoon) inches.
+    /// Sum hourly precip for a date into (ride window, afternoon) inches.
     /// Hourly timestamps are local (timezone param set), so the hour is read
     /// directly from the `THH` portion of the ISO string.
-    fn precip_split_for_date(&self, date_str: &str) -> (f64, f64) {
+    fn precip_windows_for_date(&self, date_str: &str) -> (f64, f64) {
         let Some(hourly) = self.hourly.as_ref() else {
             return (0.0, 0.0);
         };
-        let mut am = 0.0;
+        let mut ride = 0.0;
         let mut pm = 0.0;
 
         for (i, t) in hourly.time.iter().enumerate() {
@@ -110,13 +111,14 @@ impl ForecastResponse {
                 continue;
             };
             match hour_of(t) {
-                Some(h) if h < AM_RAIN_CUTOFF_HOUR => am += p,
-                Some(_) => pm += p,
-                None => pm += p,
+                Some(h) if (RIDE_START_HOUR..RIDE_END_HOUR).contains(&h) => ride += p,
+                Some(h) if h >= RIDE_END_HOUR => pm += p,
+                Some(_) => {}
+                None => {}
             }
         }
 
-        (am, pm)
+        (ride, pm)
     }
 
     /// Summarize each three-hour period for the timeline background curves.
@@ -169,4 +171,43 @@ fn hour_of(ts: &str) -> Option<u32> {
 
 fn opt(v: Option<&Option<f64>>) -> f64 {
     v.and_then(|x| *x).unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rain_windows_start_when_the_park_opens() {
+        let response = ForecastResponse {
+            latitude: 0.0,
+            longitude: 0.0,
+            timezone: None,
+            daily: DailyBlock {
+                time: vec!["2026-07-11".into()],
+                precipitation_sum: vec![Some(0.35)],
+                precipitation_probability_max: vec![],
+                temperature_2m_max: vec![],
+                temperature_2m_min: vec![],
+                apparent_temperature_max: vec![],
+                wind_speed_10m_max: vec![],
+                wind_gusts_10m_max: vec![],
+                et0_fao_evapotranspiration: vec![],
+            },
+            hourly: Some(HourlyBlock {
+                time: vec![
+                    "2026-07-11T07:00".into(),
+                    "2026-07-11T08:00".into(),
+                    "2026-07-11T11:00".into(),
+                    "2026-07-11T12:00".into(),
+                ],
+                precipitation: vec![Some(0.20), Some(0.01), Some(0.02), Some(0.04)],
+                cloud_cover: vec![Some(0.0); 4],
+            }),
+        };
+
+        let day = response.days().pop().unwrap();
+        assert!((day.precip_ride_in - 0.03).abs() < 1e-9);
+        assert!((day.precip_pm_in - 0.04).abs() < 1e-9);
+    }
 }

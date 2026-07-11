@@ -71,13 +71,12 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
     let (wx_q, wx_factors) = weather_quality(day, p);
     let (conf_q, conf_factor) = confidence(day.date, today);
 
-    // Hard gate: rain falling during the (morning) ride window tanks the score.
-    // Fast-draining sand means afternoon rain barely matters, so the gate keys
-    // off morning precip rather than the whole-day total.
-    let wet_gate = if day.precip_am_in >= p.ride_day_precip_hard {
+    // Hard gate only for rain during the 8 AM-noon ride window. Overnight rain
+    // has time to drain and should not be treated as riding in the rain.
+    let wet_gate = if day.precip_ride_in >= p.ride_day_precip_hard {
         0.25
-    } else if day.precip_am_in > p.ride_day_precip_soft {
-        let t = (day.precip_am_in - p.ride_day_precip_soft)
+    } else if day.precip_ride_in > p.ride_day_precip_soft {
+        let t = (day.precip_ride_in - p.ride_day_precip_soft)
             / (p.ride_day_precip_hard - p.ride_day_precip_soft);
         lerp(0.9, 0.25, t.clamp(0.0, 1.0))
     } else {
@@ -169,9 +168,9 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     };
 
     // Rain during the ride. Wet ground is fine here (drains fast), so only rain
-    // actually falling in the morning ride window is penalized; afternoon rain
-    // is nearly ignored.
-    let ride_rain = day.precip_am_in + day.precip_pm_in * 0.15;
+    // actually falling between 8 AM and noon is penalized; afternoon rain is
+    // nearly ignored.
+    let ride_rain = day.precip_ride_in + day.precip_pm_in * 0.15;
     let wet_q = if ride_rain <= p.ride_day_precip_soft {
         1.0 - (day.precip_prob_max / 100.0) * 0.1
     } else if ride_rain >= p.ride_day_precip_hard {
@@ -203,14 +202,14 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         )
     };
 
-    let wet_note = if day.precip_am_in > p.ride_day_precip_soft {
+    let wet_note = if day.precip_ride_in > p.ride_day_precip_soft {
         format!(
-            "{:.2} in morning rain ({:.0}% chance) — likely riding wet",
-            day.precip_am_in, day.precip_prob_max
+            "{:.2} in rain from 8 AM-noon ({:.0}% chance) — likely riding wet",
+            day.precip_ride_in, day.precip_prob_max
         )
     } else if day.precip_pm_in > p.ride_day_precip_soft {
         format!(
-            "{:.2} in afternoon rain — dry morning window",
+            "{:.2} in afternoon rain — dry 8 AM-noon window",
             day.precip_pm_in
         )
     } else if day.precip_prob_max >= 40.0 {
@@ -480,7 +479,7 @@ mod tests {
             gust_max_mph: 14.0,
             et0: 0.20,
             // Assume rain falls in the afternoon by default (convective FL storms).
-            precip_am_in: 0.0,
+            precip_ride_in: 0.0,
             precip_pm_in: precip,
             precip_3h_in: [0.0; 8],
             cloud_3h_pct: [0.0; 8],
@@ -532,13 +531,13 @@ mod tests {
     }
 
     #[test]
-    fn morning_rain_penalized() {
-        // Same daily total as afternoon case, but falling in the morning window.
+    fn ride_window_rain_penalized() {
+        // Same daily total as afternoon case, but falling while the park is open.
         let mut d1 = day("2026-07-01", 1.0, 80.0);
-        d1.precip_am_in = 0.0;
+        d1.precip_ride_in = 0.0;
         d1.precip_pm_in = 1.0;
         let mut d2 = day("2026-07-02", 0.8, 78.0);
-        d2.precip_am_in = 0.8; // rains during the morning ride
+        d2.precip_ride_in = 0.8; // rains while the park is open
         d2.precip_pm_in = 0.0;
         let days = vec![d1, d2];
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
@@ -546,7 +545,7 @@ mod tests {
         let d = &scored[1];
         assert!(
             d.stars <= 3.5,
-            "morning rain should tank the ride, got {:.1} (score {:.2})",
+            "ride-window rain should tank the ride, got {:.1} (score {:.2})",
             d.stars,
             d.score
         );
@@ -556,10 +555,10 @@ mod tests {
     fn afternoon_rain_tolerated() {
         // Rain arrives only in the afternoon after a good packing rain.
         let mut prior = day("2026-07-01", 1.0, 80.0);
-        prior.precip_am_in = 0.0;
+        prior.precip_ride_in = 0.0;
         prior.precip_pm_in = 1.0;
         let mut ride = day("2026-07-02", 0.5, 82.0);
-        ride.precip_am_in = 0.0; // dry morning
+        ride.precip_ride_in = 0.0; // dry ride window
         ride.precip_pm_in = 0.5; // afternoon storm
         let days = vec![prior, ride];
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
@@ -570,6 +569,43 @@ mod tests {
             "afternoon-only rain should stay rideable, got {:.1} (score {:.2})",
             d.stars,
             d.score
+        );
+    }
+
+    #[test]
+    fn overnight_rain_does_not_penalize_the_ride_window() {
+        let prior = day("2026-07-01", 1.0, 80.0);
+        let dry_ride = day("2026-07-02", 0.0, 82.0);
+        let mut overnight_rain = day("2026-07-02", 0.25, 82.0);
+        overnight_rain.precip_ride_in = 0.0;
+        overnight_rain.precip_pm_in = 0.0;
+        overnight_rain.precip_prob_max = dry_ride.precip_prob_max;
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+
+        let dry_score = score_days(&[prior.clone(), dry_ride], today, &Params::default())[1].score;
+        let overnight_score =
+            score_days(&[prior, overnight_rain], today, &Params::default())[1].score;
+        assert!(
+            (dry_score - overnight_score).abs() < 1e-9,
+            "overnight rain should not lower the ride score: dry {dry_score:.3} vs overnight {overnight_score:.3}"
+        );
+    }
+
+    #[test]
+    fn light_ride_window_rain_is_tolerated_on_packed_sand() {
+        let prior = day("2026-07-01", 1.0, 80.0);
+        let dry_ride = day("2026-07-02", 0.0, 82.0);
+        let mut light_rain = day("2026-07-02", 0.04, 82.0);
+        light_rain.precip_ride_in = 0.04;
+        light_rain.precip_pm_in = 0.0;
+        light_rain.precip_prob_max = dry_ride.precip_prob_max;
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+
+        let dry_score = score_days(&[prior.clone(), dry_ride], today, &Params::default())[1].score;
+        let light_rain_score = score_days(&[prior, light_rain], today, &Params::default())[1].score;
+        assert!(
+            (dry_score - light_rain_score).abs() < 1e-9,
+            "light ride-window rain should be tolerated: dry {dry_score:.3} vs light {light_rain_score:.3}"
         );
     }
 

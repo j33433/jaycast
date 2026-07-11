@@ -17,9 +17,9 @@ pub struct Params {
     pub ideal_hours_since_rain: f64,
     /// After this many dry hours, pack benefit fades out.
     pub pack_fade_hours: f64,
-    /// Morning-rain amount that starts a real "rained-on ride" penalty (inches).
+    /// Ride-window rain amount that starts a real "rained-on ride" penalty (inches).
     pub ride_day_precip_soft: f64,
-    /// Morning-rain amount that fully tanks the ride (inches).
+    /// Ride-window rain amount that fully tanks the ride (inches).
     pub ride_day_precip_hard: f64,
     /// Reference daily ET0 (inches) for "normal" drying. Sunny days exceed it
     /// (dry faster), cloudy days fall below (stay damp longer).
