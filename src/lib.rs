@@ -1,9 +1,9 @@
 //! jaycast — forecast the best days for riding Camp Murphy
 
 mod app;
-mod score;
+pub mod score;
 mod theme;
-mod weather;
+pub mod weather;
 
 use leptos::prelude::*;
 use wasm_bindgen::prelude::*;

@@ -128,6 +128,31 @@ fn build_url(model: WeatherModel) -> String {
         url.push_str(&format!("&models={m}"));
     }
 
+    append_weather_fields(&mut url);
+    url
+}
+
+/// Build an Open-Meteo request for a fixed local date range.
+/// Used by the native analysis CLI to score a specific past or future day.
+pub fn build_date_range_url(
+    model: WeatherModel,
+    start: chrono::NaiveDate,
+    end: chrono::NaiveDate,
+) -> String {
+    let mut url = format!(
+        "{}?latitude={LAT}&longitude={LON}&timezone={TIMEZONE}&start_date={start}&end_date={end}",
+        model.endpoint()
+    );
+
+    if let Some(m) = model.models_param() {
+        url.push_str(&format!("&models={m}"));
+    }
+
+    append_weather_fields(&mut url);
+    url
+}
+
+fn append_weather_fields(url: &mut String) {
     url.push_str(
         "&daily=precipitation_sum,precipitation_probability_max,\
          temperature_2m_max,temperature_2m_min,apparent_temperature_max,\
@@ -135,7 +160,6 @@ fn build_url(model: WeatherModel) -> String {
     );
     url.push_str("&hourly=precipitation,cloud_cover");
     url.push_str("&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch");
-    url
 }
 
 fn load_cache(model: WeatherModel) -> Option<ForecastResponse> {

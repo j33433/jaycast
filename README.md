@@ -30,6 +30,8 @@ cargo test            # heuristic unit tests
 trunk build --release # static site in dist/
 ```
 
+Analyze a date or inclusive range with the same scorer: `cargo run --features cli --bin jaycast -- analyze 2026-07-08:2026-07-11 both` (omit it for today).
+
 ## Score model
 
 Heuristic weights (see `src/score/params.rs` and `src/score/heuristic.rs`):
