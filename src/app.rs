@@ -1,4 +1,4 @@
-use chrono::{Local, NaiveDate};
+use chrono::{Duration, Local, NaiveDate};
 use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -40,39 +40,51 @@ pub fn App() -> impl IntoView {
         state.set(LoadState::Loading);
         spawn_local(async move {
             match weather::fetch_forecast(m).await {
-                Ok(resp) => {
-                    grid_lat.set(resp.latitude);
-                    grid_lon.set(resp.longitude);
-                    let days = resp.days();
+                Ok(forecast) => {
                     let today = Local::now().date_naive();
-                    let scored = score_days(&days, today, &Params::default());
+                    let history_start = today - Duration::days(weather::PAST_DAYS.into());
+                    let history_end = today - Duration::days(1);
+                    match weather::fetch_historical_analysis(history_start, history_end).await {
+                        Ok(history) => {
+                            grid_lat.set(forecast.latitude);
+                            grid_lon.set(forecast.longitude);
+                            let days = weather::combine_history_and_forecast(
+                                history.days(),
+                                forecast.days(),
+                                today,
+                            );
+                            let scored = score_days(&days, today, &Params::default());
 
-                    let today_idx = scored
-                        .iter()
-                        .position(|d| d.is_today)
-                        .or_else(|| scored.iter().position(|d| !d.is_past))
-                        .unwrap_or(0);
+                            let today_idx = scored
+                                .iter()
+                                .position(|d| d.is_today)
+                                .or_else(|| scored.iter().position(|d| !d.is_past))
+                                .unwrap_or(0);
 
-                    if first {
-                        view_start.set(today_idx);
+                            if first {
+                                view_start.set(today_idx);
+                            }
+
+                            let prev_sel = selected.get_untracked();
+                            if first
+                                || (prev_sel.is_some()
+                                    && !scored.iter().any(|d| Some(d.date) == prev_sel))
+                            {
+                                let pick = scored
+                                    .iter()
+                                    .find(|d| d.best)
+                                    .or_else(|| scored.get(today_idx))
+                                    .or_else(|| scored.first())
+                                    .map(|d| d.date);
+                                selected.set(pick);
+                            }
+
+                            is_first_load.set(false);
+                            refreshed_at.set(Local::now().format("%-I:%M %p").to_string());
+                            state.set(LoadState::Ready(scored));
+                        }
+                        Err(e) => state.set(LoadState::Error(e)),
                     }
-
-                    let prev_sel = selected.get_untracked();
-                    if first
-                        || (prev_sel.is_some() && !scored.iter().any(|d| Some(d.date) == prev_sel))
-                    {
-                        let pick = scored
-                            .iter()
-                            .find(|d| d.best)
-                            .or_else(|| scored.get(today_idx))
-                            .or_else(|| scored.first())
-                            .map(|d| d.date);
-                        selected.set(pick);
-                    }
-
-                    is_first_load.set(false);
-                    refreshed_at.set(Local::now().format("%-I:%M %p").to_string());
-                    state.set(LoadState::Ready(scored));
                 }
                 Err(e) => state.set(LoadState::Error(e)),
             }
@@ -195,6 +207,11 @@ fn ReadyView(
             <p>
                 "Forecasts the best days for riding Camp Murphy sand. "
                 "Not trail status. Use your own judgment."
+            </p>
+            <p>
+                "Completed days use ECMWF IFS historical analysis; today onward uses "
+                {move || model.get().label()}
+                "."
             </p>
             <p>
                 {move || model.get().label()}

@@ -3,7 +3,9 @@ use std::{env, process};
 use chrono::{Duration, Local, NaiveDate};
 use jaycast::{
     score::{score_days, DayForecast, Params},
-    weather::{build_date_range_url, DayWeather, ForecastResponse, WeatherModel},
+    weather::{
+        build_date_range_url, build_historical_url, DayWeather, ForecastResponse, WeatherModel,
+    },
 };
 
 fn main() {
@@ -48,45 +50,107 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         _ => return Err(format!("unknown model {model:?}; use gfs, ecmwf, or both")),
     };
     let fetch_start = start - Duration::days(3);
+    let historical = (fetch_start < today)
+        .then(|| {
+            let history_end = today - Duration::days(1);
+            fetch_forecast(
+                build_historical_url(fetch_start, history_end),
+                "historical IFS analysis",
+            )
+        })
+        .transpose()?;
+    let historical_days = historical
+        .as_ref()
+        .map(ForecastResponse::days)
+        .unwrap_or_default();
 
-    for model in models {
-        let url = build_date_range_url(model, fetch_start, end);
-        let response: ForecastResponse = ureq::get(&url)
-            .call()
-            .map_err(|error| format!("{} request failed: {error}", model.short()))?
-            .into_json()
-            .map_err(|error| format!("{} response could not be parsed: {error}", model.short()))?;
-        let days = response.days();
-        let scores = score_days(&days, today, &Params::default());
-        println!(
-            "{} | grid {:.3}, {:.3}",
-            model.label(),
+    if start < today {
+        let history_end = end.min(today - Duration::days(1));
+        let response = historical
+            .as_ref()
+            .ok_or_else(|| "historical data was not loaded".to_string())?;
+        print_range_analysis(
+            "Historical ECMWF IFS analysis",
             response.latitude,
-            response.longitude
-        );
+            response.longitude,
+            start,
+            history_end,
+            &historical_days,
+            today,
+        )?;
+    }
 
-        let mut date = start;
-        loop {
-            let weather = days
-                .iter()
-                .find(|day| day.date == date)
-                .ok_or_else(|| format!("{} returned no data for {date}", model.short()))?;
-            let score = scores
-                .iter()
-                .find(|day| day.date == date)
-                .ok_or_else(|| format!("{} could not score {date}", model.short()))?;
-            print_analysis(date, weather, score);
-            if date == end {
-                break;
-            }
-            date += Duration::days(1);
+    if end >= today {
+        let forecast_start = fetch_start.max(today);
+        for model in models {
+            let response = fetch_forecast(
+                build_date_range_url(model, forecast_start, end),
+                model.short(),
+            )?;
+            let mut days = historical_days.clone();
+            days.extend(response.days());
+            days.sort_by_key(|day| day.date);
+            print_range_analysis(
+                model.label(),
+                response.latitude,
+                response.longitude,
+                start.max(today),
+                end,
+                &days,
+                today,
+            )?;
         }
     }
     Ok(())
 }
 
-fn print_analysis(date: NaiveDate, weather: &DayWeather, score: &DayForecast) {
-    println!("  {date}");
+fn fetch_forecast(url: String, source: &str) -> Result<ForecastResponse, String> {
+    ureq::get(&url)
+        .call()
+        .map_err(|error| format!("{source} request failed: {error}"))?
+        .into_json()
+        .map_err(|error| format!("{source} response could not be parsed: {error}"))
+}
+
+fn print_range_analysis(
+    source: &str,
+    latitude: f64,
+    longitude: f64,
+    start: NaiveDate,
+    end: NaiveDate,
+    days: &[DayWeather],
+    today: NaiveDate,
+) -> Result<(), String> {
+    let scores = score_days(days, today, &Params::default());
+
+    let mut date = start;
+    loop {
+        let weather = days
+            .iter()
+            .find(|day| day.date == date)
+            .ok_or_else(|| format!("{source} returned no data for {date}"))?;
+        let score = scores
+            .iter()
+            .find(|day| day.date == date)
+            .ok_or_else(|| format!("{source} could not score {date}"))?;
+        print_analysis(date, source, latitude, longitude, weather, score);
+        if date == end {
+            break;
+        }
+        date += Duration::days(1);
+    }
+    Ok(())
+}
+
+fn print_analysis(
+    date: NaiveDate,
+    source: &str,
+    latitude: f64,
+    longitude: f64,
+    weather: &DayWeather,
+    score: &DayForecast,
+) {
+    println!("{date} | {source} | grid {latitude:.3}, {longitude:.3}");
     println!(
         "  score {:.1} stars ({:.0}%) | rain {:.2}\" total, {:.2}\" 8 AM-noon, {:.2}\" afternoon",
         score.stars,

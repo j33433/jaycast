@@ -116,6 +116,40 @@ pub async fn fetch_forecast(model: WeatherModel) -> Result<ForecastResponse, Str
     Ok(payload)
 }
 
+/// Fetch observation-informed ECMWF IFS analysis for completed days.
+pub async fn fetch_historical_analysis(
+    start: chrono::NaiveDate,
+    end: chrono::NaiveDate,
+) -> Result<ForecastResponse, String> {
+    let resp = Request::get(&build_historical_url(start, end))
+        .send()
+        .await
+        .map_err(|e| format!("Historical weather network error: {e}"))?;
+
+    if !resp.ok() {
+        return Err(format!(
+            "Historical weather API returned HTTP {}",
+            resp.status()
+        ));
+    }
+
+    resp.json()
+        .await
+        .map_err(|e| format!("Failed to parse historical weather data: {e}"))
+}
+
+/// Completed days use historical analysis; today and future use the selected forecast model.
+pub fn combine_history_and_forecast(
+    mut history: Vec<DayWeather>,
+    forecast: Vec<DayWeather>,
+    today: chrono::NaiveDate,
+) -> Vec<DayWeather> {
+    history.retain(|day| day.date < today);
+    history.extend(forecast.into_iter().filter(|day| day.date >= today));
+    history.sort_by_key(|day| day.date);
+    history
+}
+
 fn build_url(model: WeatherModel) -> String {
     let mut url = format!(
         "{}?latitude={LAT}&longitude={LON}\
@@ -148,6 +182,16 @@ pub fn build_date_range_url(
         url.push_str(&format!("&models={m}"));
     }
 
+    append_weather_fields(&mut url);
+    url
+}
+
+/// Build an Open-Meteo historical analysis request for completed past days.
+pub fn build_historical_url(start: chrono::NaiveDate, end: chrono::NaiveDate) -> String {
+    let mut url = format!(
+        "https://archive-api.open-meteo.com/v1/archive?latitude={LAT}&longitude={LON}\
+         &timezone={TIMEZONE}&start_date={start}&end_date={end}&models=ecmwf_ifs"
+    );
     append_weather_fields(&mut url);
     url
 }
@@ -189,5 +233,42 @@ fn save_cache(model: WeatherModel, payload: &ForecastResponse) {
 pub fn clear_cache(model: WeatherModel) {
     if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
         let _ = storage.remove_item(model.cache_key());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn day(date: &str, precip_in: f64) -> DayWeather {
+        DayWeather {
+            date: chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
+            precip_in,
+            precip_prob_max: 0.0,
+            temp_max_f: 0.0,
+            temp_min_f: 0.0,
+            apparent_max_f: 0.0,
+            wind_max_mph: 0.0,
+            gust_max_mph: 0.0,
+            et0: 0.0,
+            precip_ride_in: 0.0,
+            precip_pm_in: 0.0,
+            precip_3h_in: [0.0; 8],
+            cloud_3h_pct: [0.0; 8],
+        }
+    }
+
+    #[test]
+    fn historical_analysis_replaces_completed_forecast_days() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 7, 11).unwrap();
+        let days = combine_history_and_forecast(
+            vec![day("2026-07-09", 0.1), day("2026-07-10", 0.4)],
+            vec![day("2026-07-10", 0.0), day("2026-07-11", 0.2)],
+            today,
+        );
+
+        assert_eq!(days.len(), 3);
+        assert_eq!(days[1].precip_in, 0.4);
+        assert_eq!(days[2].precip_in, 0.2);
     }
 }
