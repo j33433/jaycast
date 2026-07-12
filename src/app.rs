@@ -138,27 +138,13 @@ pub fn App() -> impl IntoView {
     view! {
         <div id="app">
             <header class="header">
-                {move || {
-                    if trail.get() == Trail::CampMurphy {
-                        view! {
-                            <img
-                                class="camp-murphy-mark"
-                                src="/jaycast/jaycast-plain.svg"
-                                width="100"
-                                height="100"
-                                alt=""
-                            />
-                        }
-                        .into_any()
-                    } else {
-                        view! {
-                            <div class="trail-mark" aria-hidden="true">
-                                {trail.get().initials()}
-                            </div>
-                        }
-                        .into_any()
-                    }
-                }}
+                <img
+                    class="trail-logo"
+                    src=move || trail.get().icon_src()
+                    width="100"
+                    height="100"
+                    alt=""
+                />
                 <div class="header-text">
                     <h1>"jay" <span>"cast"</span></h1>
                     <span class="tagline">{move || trail.get().tagline()}</span>
@@ -243,24 +229,9 @@ fn LocationDialog(
                         </div>
                         <div class="location-options">
                             {Trail::ALL.into_iter().map(|trail| {
-                                let initials = trail.initials();
                                 let name = trail.name();
                                 let location = trail.location();
-                                let icon = if trail == Trail::CampMurphy {
-                                    view! {
-                                        <img
-                                            class="location-icon camp-murphy-option-icon"
-                                            src="/jaycast/jaycast-plain.svg"
-                                            alt=""
-                                        />
-                                    }
-                                    .into_any()
-                                } else {
-                                    view! {
-                                        <span class="location-icon" aria-hidden="true">{initials}</span>
-                                    }
-                                    .into_any()
-                                };
+                                let icon_src = trail.icon_src();
                                 view! {
                                     <button
                                         type="button"
@@ -273,7 +244,7 @@ fn LocationDialog(
                                         }
                                         on:click=move |_| on_change.run(trail)
                                     >
-                                        {icon}
+                                        <img class="location-icon" src=icon_src alt=""/>
                                         <span class="location-option-copy">
                                             <strong>{name}</strong>
                                             <span>{location}</span>

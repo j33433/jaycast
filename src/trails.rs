@@ -53,11 +53,11 @@ impl Trail {
         }
     }
 
-    pub fn initials(self) -> &'static str {
+    pub fn icon_src(self) -> &'static str {
         match self {
-            Self::CampMurphy => "CM",
-            Self::Markham => "MP",
-            Self::QuietWaters => "QW",
+            Self::CampMurphy => "/jaycast/jaycast-plain.svg",
+            Self::Markham => "/jaycast/gatorcast-plain.svg",
+            Self::QuietWaters => "/jaycast/eaglecast-plain.svg",
         }
     }
 

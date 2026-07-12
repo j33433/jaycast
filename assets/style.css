@@ -154,25 +154,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.trail-mark {
-  flex-shrink: 0;
-  width: 120px;
-  height: 120px;
-  display: grid;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--jay) 50%, var(--border));
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--jay-soft) 40%, transparent), transparent 42%),
-    color-mix(in srgb, var(--bg-elev) 80%, var(--jay) 20%);
-  color: var(--jay-soft);
-  font-family: var(--mono);
-  font-size: 1.5rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-}
-
-.camp-murphy-mark {
+.trail-logo {
   display: block;
   width: 120px;
   height: 120px;
@@ -330,22 +312,9 @@ body {
 }
 
 .location-icon {
-  display: grid;
   width: 2.4rem;
   height: 2.4rem;
   flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--jay) 50%, var(--border));
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--jay) 16%, var(--bg));
-  color: var(--jay-soft);
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  font-weight: 750;
-}
-
-.location-icon.camp-murphy-option-icon {
-  padding: 0.15rem;
   object-fit: contain;
 }
 
@@ -1009,13 +978,7 @@ body {
     gap: 0.75rem;
   }
 
-  .trail-mark {
-    width: 4.5rem;
-    height: 4.5rem;
-    font-size: 1rem;
-  }
-
-  .camp-murphy-mark {
+  .trail-logo {
     width: 4.5rem;
     height: 4.5rem;
   }
