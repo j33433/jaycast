@@ -615,9 +615,9 @@ fn Timeline(
                         let tint = score_style(d.score);
                         let detail = d.clone();
                         let possible_closure = d.closure_status.is_possible();
-                        let facebook_advisory = possible_closure
-                            && date >= Local::now().date_naive()
-                            && date <= Local::now().date_naive() + Duration::days(1);
+                        let today = Local::now().date_naive();
+                        let facebook_status_link = date == today
+                            || (possible_closure && date == today + Duration::days(1));
                         let card_label = format!("Show details for {date_s}");
                         let dow = if is_today {
                             "Today".to_string()
@@ -691,7 +691,7 @@ fn Timeline(
                                         <div class="blurb">
                                             {blurb}
                                             {move || {
-                                                (trail.get() == Trail::Markham && facebook_advisory).then(|| {
+                                                (trail.get() == Trail::Markham && facebook_status_link).then(|| {
                                                     view! {
                                                         <span class="facebook-status-copy">
                                                             " - Check "
@@ -731,12 +731,8 @@ fn Timeline(
 }
 
 fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
-    let facebook_advisory = trail == Trail::Markham
-        && d.date >= Local::now().date_naive()
-        && d.date <= Local::now().date_naive() + Duration::days(1)
-        && d.closure_status.is_possible();
     let score_line = if trail == Trail::Markham {
-        format!("score {:.0}% · all-day closure outlook", d.score * 100.0)
+        format!("score {:.0}%", d.score * 100.0)
     } else {
         format!(
             "score {:.0}% · {:.0}% rain chance 8 AM-noon",
@@ -748,19 +744,6 @@ fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
     view! {
         <section class="detail" style=tint>
             <p class="score-line">{score_line}</p>
-            {facebook_advisory.then(|| view! {
-                <p class="facebook-advisory">
-                    "Possible closure: check "
-                    <a
-                        href="https://www.facebook.com/groups/MarkhamParkMTB"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        "Facebook"
-                    </a>
-                    " for current trail status."
-                </p>
-            })}
             <ul class="factors">
                 {d.factors
                     .into_iter()
