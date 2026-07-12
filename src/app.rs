@@ -138,15 +138,23 @@ pub fn App() -> impl IntoView {
     view! {
         <div id="app">
             <header class="header">
-                <img
-                    class="trail-logo"
-                    src=move || trail.get().icon_src()
-                    width="100"
-                    height="100"
-                    alt=""
-                />
+                <button
+                    type="button"
+                    class="logo-change"
+                    aria-label="Change trail location"
+                    title="Change trail location"
+                    on:click=move |_| location_dialog_open.set(true)
+                >
+                    <img
+                        class="trail-logo"
+                        src=move || trail.get().icon_src()
+                        width="100"
+                        height="100"
+                        alt=""
+                    />
+                </button>
                 <div class="header-text">
-                    <h1>"jay" <span>"cast"</span></h1>
+                    <h1>{move || trail.get().brand()} <span>"cast"</span></h1>
                     <span class="tagline">{move || trail.get().tagline()}</span>
                     <p class="location">
                         {move || trail.get().name()}
@@ -694,11 +702,14 @@ fn Timeline(
 }
 
 fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
+    let facebook_advisory = trail == Trail::Markham
+        && d.date >= Local::now().date_naive()
+        && d.date <= Local::now().date_naive() + Duration::days(1)
+        && d.blurb.starts_with("possibly closed");
     let score_line = if trail == Trail::Markham {
         format!(
-            "score {:.0}% · drainage advisory; {:.0}% rain chance 8 AM-noon",
-            d.score * 100.0,
-            d.precip_prob_ride_max
+            "score {:.0}% · sunup-sundown drainage advisory",
+            d.score * 100.0
         )
     } else {
         format!(
@@ -711,6 +722,11 @@ fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
     view! {
         <section class="detail" style=tint>
             <p class="score-line">{score_line}</p>
+            {facebook_advisory.then(|| view! {
+                <p class="facebook-advisory">
+                    "Possible closure: check Facebook for current trail status."
+                </p>
+            })}
             <ul class="factors">
                 {d.factors
                     .into_iter()

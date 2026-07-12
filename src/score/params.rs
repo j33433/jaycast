@@ -70,7 +70,7 @@ impl Default for Params {
             ideal_hours_since_rain: 18.0,
             pack_fade_hours: 72.0, // ~3 days
             dry_timing_floor: 0.1,
-            drainage_hours: 48.0,
+            drainage_hours: 8.5,
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
             et0_dry_ref: 0.20,
@@ -97,7 +97,9 @@ impl Params {
             Trail::CampMurphy => {}
             Trail::Markham => {
                 params.model = RideabilityModel::Drainage;
-                params.significant_rain_in = 0.05;
+                params.significant_rain_in = 0.10;
+                // July 11 observation: 0.21 in ending around 4 AM reopened at 12:30 PM.
+                params.drainage_hours = 8.5;
                 params.w_pack = 0.55;
                 params.w_weather = 0.35;
             }

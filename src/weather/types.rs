@@ -6,6 +6,7 @@ const RIDE_END_HOUR: u32 = 12;
 /// Park closes at sundown. Florida summer sunset is ~8 PM local; hours from this
 /// point onward are after close and do not affect ride-day wetness scoring.
 const PARK_CLOSE_HOUR: u32 = 20;
+const HOURS_PER_DAY: usize = 24;
 const THREE_HOUR_BUCKETS: usize = 8;
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
@@ -61,6 +62,8 @@ pub struct DayWeather {
     pub precip_ride_in: f64,
     /// Precip while the park is still open after noon (noon until sundown), inches.
     pub precip_pm_in: f64,
+    /// Rainfall in each local hour. Used for Markham's timed drainage model.
+    pub precip_hourly_in: [f64; HOURS_PER_DAY],
     /// Rainfall in each three-hour period, from midnight through 9 PM.
     pub precip_3h_in: [f64; THREE_HOUR_BUCKETS],
     /// Average cloud cover in each three-hour period, from midnight through 9 PM.
@@ -84,6 +87,7 @@ impl ForecastResponse {
                 self.prob_ride_max_for_date(&self.daily.time[i], precip_prob_max);
             let (precip_3h_in, cloud_3h_pct) =
                 self.three_hour_weather_for_date(&self.daily.time[i]);
+            let precip_hourly_in = self.hourly_precip_for_date(&self.daily.time[i]);
 
             out.push(DayWeather {
                 date,
@@ -98,12 +102,34 @@ impl ForecastResponse {
                 et0: opt(self.daily.et0_fao_evapotranspiration.get(i)),
                 precip_ride_in,
                 precip_pm_in,
+                precip_hourly_in,
                 precip_3h_in,
                 cloud_3h_pct,
             });
         }
 
         out
+    }
+
+    fn hourly_precip_for_date(&self, date_str: &str) -> [f64; HOURS_PER_DAY] {
+        let Some(hourly) = self.hourly.as_ref() else {
+            return [0.0; HOURS_PER_DAY];
+        };
+        let mut rain = [0.0; HOURS_PER_DAY];
+        for (i, timestamp) in hourly.time.iter().enumerate() {
+            if !timestamp.starts_with(date_str) {
+                continue;
+            }
+            let Some(hour) = hour_of(timestamp) else {
+                continue;
+            };
+            if let Some(value) = hourly.precipitation.get(i).and_then(|value| *value) {
+                if let Some(total) = rain.get_mut(hour as usize) {
+                    *total += value;
+                }
+            }
+        }
+        rain
     }
 
     /// Sum hourly precip for a date into (morning ride window, open afternoon).
@@ -269,6 +295,7 @@ mod tests {
         assert!((day.precip_ride_in - 0.03).abs() < 1e-9);
         // Noon + 7 PM count; 8 PM is after sundown close and is ignored.
         assert!((day.precip_pm_in - 0.09).abs() < 1e-9);
+        assert!((day.precip_hourly_in[8] - 0.01).abs() < 1e-9);
         // Ride-window chance is max of 8 AM and 11 AM, not noon/evening peaks.
         assert!((day.precip_prob_ride_max - 55.0).abs() < 1e-9);
     }

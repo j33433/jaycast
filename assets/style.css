@@ -158,7 +158,20 @@ body {
   display: block;
   width: 120px;
   height: 120px;
+}
+
+.logo-change {
   flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.logo-change:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid var(--jay);
+  outline-offset: 3px;
 }
 
 .header-text {
@@ -775,6 +788,13 @@ body {
   font-size: 0.85rem;
   color: var(--text-muted);
   margin: 0 0 0.85rem;
+}
+
+.detail .facebook-advisory {
+  margin: -0.35rem 0 0.85rem;
+  color: var(--warn);
+  font-size: 0.85rem;
+  font-weight: 650;
 }
 
 .factors {

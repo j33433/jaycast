@@ -300,6 +300,7 @@ mod tests {
             et0: 0.0,
             precip_ride_in: 0.0,
             precip_pm_in: 0.0,
+            precip_hourly_in: [0.0; 24],
             precip_3h_in: [0.0; 8],
             cloud_3h_pct: [0.0; 8],
         }

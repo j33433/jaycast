@@ -77,6 +77,14 @@ impl Trail {
         }
     }
 
+    pub fn brand(self) -> &'static str {
+        match self {
+            Self::CampMurphy => "jay",
+            Self::Markham => "gator",
+            Self::QuietWaters => "eagle",
+        }
+    }
+
     pub fn from_slug(value: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|trail| trail.slug() == value)
     }

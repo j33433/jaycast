@@ -1,10 +1,13 @@
 //! Heuristic rideability score for sandy trails that pack after rain.
 
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 
 use crate::weather::DayWeather;
 
 use super::params::{Params, RideabilityModel};
+
+const DAYLIGHT_START_HOUR: f64 = 7.0;
+const DAYLIGHT_END_HOUR: f64 = 20.0;
 
 #[derive(Clone, Debug)]
 pub struct Factor {
@@ -68,9 +71,18 @@ pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec
 fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> DayForecast {
     let day = &days[idx];
 
-    let (pack_q, pack_factors) = match p.model {
-        RideabilityModel::Drainage => drainage_quality(days, idx, p),
-        RideabilityModel::SandPack | RideabilityModel::MixedSurface => pack_quality(days, idx, p),
+    let drainage = (p.model == RideabilityModel::Drainage).then(|| drainage_status(days, idx, p));
+    let (pack_q, pack_factors) = match drainage.as_ref() {
+        Some(status) => (
+            status.quality,
+            vec![Factor {
+                name: "Trail status",
+                note: status.note.clone(),
+                contribution: status.quality * 2.0 - 1.0,
+                quality: status.quality,
+            }],
+        ),
+        None => pack_quality(days, idx, p),
     };
     let (wx_q, wx_factors) = weather_quality(day, p);
     let (conf_q, conf_factor) = confidence(day.date, today);
@@ -78,10 +90,10 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
     // Hard gate only for rain during the 8 AM-noon ride window. Overnight rain
     // has time to drain and should not be treated as riding in the rain.
     let wet_gate = match p.model {
-        // Markham closes for rain regardless of whether it falls in the usual
-        // ride window, so its advisory is based on the daily rain forecast.
-        RideabilityModel::Drainage if day.precip_in > 0.01 => 0.15,
-        RideabilityModel::Drainage => 1.0,
+        RideabilityModel::Drainage => drainage
+            .as_ref()
+            .map(|status| status.daylight_fraction)
+            .unwrap_or(1.0),
         RideabilityModel::SandPack | RideabilityModel::MixedSurface => {
             if day.precip_ride_in >= p.ride_day_precip_hard {
                 0.25
@@ -112,7 +124,17 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
     factors.push(cf);
 
     let stars = score_to_stars(score);
-    let blurb = make_blurb(days, idx, day, pack_q, &factors, p);
+    let mut blurb = drainage
+        .as_ref()
+        .map(|status| status.blurb.clone())
+        .unwrap_or_else(|| make_blurb(day, pack_q, &factors, p));
+    if p.model == RideabilityModel::Drainage
+        && day.date >= today
+        && day.date <= today + Duration::days(1)
+        && blurb.starts_with("possibly closed")
+    {
+        blurb.push_str(" - check Facebook status");
+    }
 
     DayForecast {
         date: day.date,
@@ -267,49 +289,87 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     (pack, factors)
 }
 
-fn drainage_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor>) {
-    let day = &days[idx];
-    if day.precip_in > 0.01 {
-        return (
-            0.05,
-            vec![Factor {
-                name: "Trail status",
-                note: format!(
-                    "possibly closed - {:.2} in rain expected; verify before traveling",
-                    day.precip_in
-                ),
-                contribution: -1.0,
-                quality: 0.05,
-            }],
-        );
+struct DrainageStatus {
+    quality: f64,
+    daylight_fraction: f64,
+    note: String,
+    blurb: String,
+}
+
+fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatus {
+    let Some(rain_end_hour) = last_significant_rain_end_hour(days, idx, p) else {
+        return DrainageStatus {
+            quality: 1.0,
+            daylight_fraction: 1.0,
+            note: "no recent drainage concern".into(),
+            blurb: "drainage window likely clear".into(),
+        };
+    };
+    let reopen_hour = rain_end_hour + p.drainage_hours;
+
+    if reopen_hour <= DAYLIGHT_START_HOUR {
+        return DrainageStatus {
+            quality: 0.95,
+            daylight_fraction: 1.0,
+            note: "drainage should clear before sunup".into(),
+            blurb: "drainage window likely clear".into(),
+        };
+    }
+    if reopen_hour >= DAYLIGHT_END_HOUR {
+        return DrainageStatus {
+            quality: 0.05,
+            daylight_fraction: 0.0,
+            note: format!(
+                "possibly closed through sundown - reopening likely after {}",
+                format_hour(reopen_hour)
+            ),
+            blurb: "possibly closed through sundown".into(),
+        };
     }
 
-    let hours_since = hours_since_significant_rain(days, idx, p.significant_rain_in);
-    let effective_hours = hours_since.map(|h| h * drying_factor(days, idx, hours_since, p));
-    let (quality, note) = match effective_hours {
-        None => (1.0, "no recent drainage concern".into()),
-        Some(hours) if hours < p.drainage_hours => (
-            lerp(0.15, 0.85, (hours / p.drainage_hours).clamp(0.0, 1.0)),
-            format!(
-                "possibly closed - ~{hours:.0}h drying after rain (allow ~{:.0}h)",
-                p.drainage_hours
-            ),
+    let daylight_fraction = ((DAYLIGHT_END_HOUR - reopen_hour)
+        / (DAYLIGHT_END_HOUR - DAYLIGHT_START_HOUR))
+        .clamp(0.0, 1.0);
+    DrainageStatus {
+        quality: daylight_fraction,
+        daylight_fraction,
+        note: format!(
+            "possibly closed at sunup - reopening likely after {}",
+            format_hour(reopen_hour)
         ),
-        Some(hours) => (
-            0.95,
-            format!("~{hours:.0}h drying after rain - drainage window likely clear"),
-        ),
-    };
+        blurb: format!("possibly closed until {}", format_hour(reopen_hour)),
+    }
+}
 
-    (
-        quality,
-        vec![Factor {
-            name: "Trail status",
-            note,
-            contribution: quality * 2.0 - 1.0,
-            quality,
-        }],
-    )
+fn last_significant_rain_end_hour(days: &[DayWeather], idx: usize, p: &Params) -> Option<f64> {
+    for rain_idx in (0..=idx).rev() {
+        let rain_day = &days[rain_idx];
+        if rain_day.precip_in < p.significant_rain_in {
+            continue;
+        }
+        let last_hour = rain_day
+            .precip_hourly_in
+            .iter()
+            .rposition(|amount| *amount > 0.0)
+            // Hourly data can be absent in an API response; use midday as a
+            // conservative fallback instead of claiming an early reopening.
+            .map(|hour| hour as f64 + 1.0)
+            .unwrap_or(12.0);
+        return Some(last_hour - (idx - rain_idx) as f64 * 24.0);
+    }
+    None
+}
+
+fn format_hour(hour: f64) -> String {
+    let total_minutes = (hour * 60.0).round() as i32;
+    let hour_24 = (total_minutes.div_euclid(60)).rem_euclid(24);
+    let minute = total_minutes.rem_euclid(60);
+    let suffix = if hour_24 < 12 { "AM" } else { "PM" };
+    let hour_12 = match hour_24 % 12 {
+        0 => 12,
+        hour => hour,
+    };
+    format!("{hour_12}:{minute:02} {suffix}")
 }
 
 fn weather_quality(day: &DayWeather, p: &Params) -> (f64, Vec<Factor>) {
@@ -496,24 +556,7 @@ pub fn score_color(score: f64) -> String {
     format!("hsl({h:.0} {s:.0}% {l:.0}%)")
 }
 
-fn make_blurb(
-    days: &[DayWeather],
-    idx: usize,
-    day: &DayWeather,
-    pack_q: f64,
-    factors: &[Factor],
-    p: &Params,
-) -> String {
-    if p.model == RideabilityModel::Drainage {
-        if day.precip_in > 0.01 {
-            return "possibly closed - rain expected".into();
-        }
-        let hours_since = hours_since_significant_rain(days, idx, p.significant_rain_in);
-        if hours_since.is_some_and(|hours| hours < p.drainage_hours) {
-            return "possibly closed - draining after rain".into();
-        }
-        return "drainage window likely clear".into();
-    }
+fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> String {
     if day.precip_in >= 0.25 {
         let wet = wet_period_blurb(day);
         return if p.model == RideabilityModel::MixedSurface {
@@ -610,6 +653,7 @@ mod tests {
             // Assume rain falls in the afternoon by default (convective FL storms).
             precip_ride_in: 0.0,
             precip_pm_in: precip,
+            precip_hourly_in: [0.0; 24],
             precip_3h_in: [0.0; 8],
             cloud_3h_pct: [0.0; 8],
         }
@@ -788,12 +832,13 @@ mod tests {
     }
 
     #[test]
-    fn markham_flags_rain_and_conservative_drainage_period() {
-        let days = vec![
-            day("2026-07-01", 0.8, 80.0),
-            day("2026-07-02", 0.0, 80.0),
-            day("2026-07-03", 0.0, 80.0),
-        ];
+    fn markham_uses_hourly_rain_to_estimate_same_day_reopening() {
+        let mut rain = day("2026-07-02", 0.213, 80.0);
+        rain.precip_hourly_in[0] = 0.039;
+        rain.precip_hourly_in[1] = 0.126;
+        rain.precip_hourly_in[2] = 0.035;
+        rain.precip_hourly_in[3] = 0.012;
+        let days = vec![rain, day("2026-07-03", 0.0, 80.0)];
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
         let scored = score_days(
             &days,
@@ -801,10 +846,25 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "possibly closed - rain expected");
-        assert_eq!(scored[1].blurb, "possibly closed - draining after rain");
-        assert_eq!(scored[2].blurb, "drainage window likely clear");
-        assert!(scored[1].score < scored[2].score);
+        assert_eq!(
+            scored[0].blurb,
+            "possibly closed until 12:30 PM - check Facebook status"
+        );
+        assert_eq!(scored[1].blurb, "drainage window likely clear");
+        assert!(scored[0].score < scored[1].score);
+    }
+
+    #[test]
+    fn markham_ignores_short_showers() {
+        let days = vec![day("2026-07-02", 0.06, 80.0)];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::Markham),
+        );
+
+        assert_eq!(scored[0].blurb, "drainage window likely clear");
     }
 
     #[test]
