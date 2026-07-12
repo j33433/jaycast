@@ -224,7 +224,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     // is ignored.
     let ride_rain = day.precip_ride_in + day.precip_pm_in * 0.15;
     let wet_q = if ride_rain <= p.ride_day_precip_soft {
-        // Dry QPF: still ding a little when the morning chance is elevated.
+        // Dry forecast amount: still ding a little when the morning chance is elevated.
         1.0 - (day.precip_prob_ride_max / 100.0) * 0.1
     } else if ride_rain >= p.ride_day_precip_hard {
         0.1
@@ -238,16 +238,16 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     let pack = (0.45 * amount_q + 0.40 * timing_q + 0.15 * wet_q).clamp(0.0, 1.0);
 
     let timing_note = match effective_hours {
-        None => "no significant rain in lookback — sand likely soft".into(),
-        Some(h) if h < 12.0 => format!("~{h:.0}h drying since rain — still settling"),
-        Some(h) if h <= 48.0 => format!("~{h:.0}h drying since rain — pack window"),
-        Some(h) => format!("~{h:.0}h drying since rain — drying out"),
+        None => "no recent rain - sand may be soft".into(),
+        Some(h) if h < 12.0 => format!("rain ended ~{h:.0}h ago - still settling"),
+        Some(h) if h <= 48.0 => format!("rain ended ~{h:.0}h ago - best trail conditions"),
+        Some(h) => format!("rain ended ~{h:.0}h ago - drying out"),
     };
 
     let amount_note = if antecedent < p.min_useful_rain_in {
-        format!("{antecedent:.2} in prior rain (need more for firm pack)")
+        format!("{antecedent:.2} in recent rain (more rain would firm the sand)")
     } else if antecedent > p.max_useful_rain_in {
-        format!("{antecedent:.2} in prior rain (heavy — may stay soft/puddled)")
+        format!("{antecedent:.2} in recent rain (heavy - may stay soft or puddled)")
     } else {
         format!(
             "{antecedent:.2} in rain in prior ~{:.0}h",
@@ -267,7 +267,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         )
     } else if day.precip_prob_ride_max >= 40.0 {
         format!(
-            "{:.0}% rain chance 8 AM-noon, mostly dry QPF",
+            "{:.0}% rain chance 8 AM-noon, mostly dry forecast",
             day.precip_prob_ride_max
         )
     } else {
@@ -279,13 +279,13 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
 
     let factors = vec![
         Factor {
-            name: "Prior rain",
+            name: "Recent rain",
             note: amount_note,
             contribution: amount_q * 2.0 - 1.0,
             quality: amount_q,
         },
         Factor {
-            name: "Pack timing",
+            name: "Trail conditions",
             note: timing_note,
             contribution: timing_q * 2.0 - 1.0,
             quality: timing_q,
@@ -314,8 +314,8 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
         return DrainageStatus {
             quality: 1.0,
             daylight_fraction: 1.0,
-            note: "no recent drainage concern".into(),
-            blurb: "drainage window likely clear".into(),
+            note: "no recent heavy rain".into(),
+            blurb: "likely open".into(),
             closure_status: ClosureStatus::Clear,
         };
     };
@@ -325,11 +325,8 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
         return DrainageStatus {
             quality: 1.0,
             daylight_fraction: 1.0,
-            note: format!(
-                "{:.2} in rain event; drainage should clear before sunup",
-                rain_event.total_in
-            ),
-            blurb: "drainage window likely clear".into(),
+            note: format!("{:.2} in rain; likely open by sunup", rain_event.total_in),
+            blurb: "likely open".into(),
             closure_status: ClosureStatus::Clear,
         };
     }
@@ -337,11 +334,8 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
         return DrainageStatus {
             quality: 0.05,
             daylight_fraction: 0.0,
-            note: format!(
-                "{:.2} in rain event; possibly closed through sundown",
-                rain_event.total_in
-            ),
-            blurb: "possibly closed through sundown".into(),
+            note: format!("{:.2} in rain; may be closed", rain_event.total_in),
+            blurb: "may be closed".into(),
             closure_status: ClosureStatus::Possible,
         };
     }
@@ -353,13 +347,13 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
         quality: daylight_fraction,
         daylight_fraction,
         note: format!(
-            "{:.2} in rain event; possibly closed while drainage clears",
+            "{:.2} in rain; may cause a temporary closure",
             rain_event.total_in
         ),
         blurb: if reopen_hour <= 14.0 {
-            "possibly closed in the morning".into()
+            "may be closed in the morning".into()
         } else {
-            "possibly closed today".into()
+            "may be closed today".into()
         },
         closure_status: ClosureStatus::Possible,
     }
@@ -494,7 +488,7 @@ fn weather_quality(day: &DayWeather, p: &Params) -> (f64, Vec<Factor>) {
         },
         Factor {
             name: "Sky",
-            note: format!("{:.0}% daily max precip probability", day.precip_prob_max),
+            note: format!("{:.0}% highest rain chance", day.precip_prob_max),
             contribution: sky_q * 2.0 - 1.0,
             quality: sky_q,
         },
@@ -508,8 +502,8 @@ fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
         return (
             1.0,
             Factor {
-                name: "Data confidence",
-                note: "observed weather (archive)".into(),
+                name: "Weather data",
+                note: "observed weather".into(),
                 contribution: 1.0,
                 quality: 1.0,
             },
@@ -537,7 +531,7 @@ fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
     (
         q,
         Factor {
-            name: "Forecast confidence",
+            name: "Forecast reliability",
             note,
             contribution: q * 2.0 - 1.0,
             quality: q,
@@ -892,9 +886,9 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "possibly closed in the morning");
+        assert_eq!(scored[0].blurb, "may be closed in the morning");
         assert_eq!(scored[0].closure_status, ClosureStatus::Possible);
-        assert_eq!(scored[1].blurb, "drainage window likely clear");
+        assert_eq!(scored[1].blurb, "likely open");
         assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
         assert!(scored[0].score < scored[1].score);
         assert!(
@@ -929,7 +923,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "drainage window likely clear");
+        assert_eq!(scored[0].blurb, "likely open");
         assert_eq!(scored[0].closure_status, ClosureStatus::Clear);
     }
 

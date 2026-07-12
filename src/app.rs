@@ -736,10 +736,7 @@ fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
         && d.date <= Local::now().date_naive() + Duration::days(1)
         && d.closure_status.is_possible();
     let score_line = if trail == Trail::Markham {
-        format!(
-            "score {:.0}% · sunup-sundown drainage advisory",
-            d.score * 100.0
-        )
+        format!("score {:.0}% · all-day closure outlook", d.score * 100.0)
     } else {
         format!(
             "score {:.0}% · {:.0}% rain chance 8 AM-noon",
