@@ -320,17 +320,34 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
         };
     };
     let reopen_hour = rain_event.end_hour + p.drainage_hours;
+    let rain_started_during_daylight = rain_event.start_hour >= DAYLIGHT_START_HOUR;
 
     if reopen_hour <= DAYLIGHT_START_HOUR {
         return DrainageStatus {
             quality: 1.0,
             daylight_fraction: 1.0,
-            note: format!("{:.2} in rain; likely open by sunup", rain_event.total_in),
+            note: format!("{:.2} in rain; likely open AM", rain_event.total_in),
             blurb: "likely open".into(),
             closure_status: ClosureStatus::Clear,
         };
     }
     if reopen_hour >= DAYLIGHT_END_HOUR {
+        if rain_started_during_daylight {
+            let daylight_fraction =
+                ((rain_event.start_hour - DAYLIGHT_START_HOUR)
+                    / (DAYLIGHT_END_HOUR - DAYLIGHT_START_HOUR))
+                .clamp(0.0, 1.0);
+            return DrainageStatus {
+                quality: daylight_fraction,
+                daylight_fraction,
+                note: format!(
+                    "{:.2} in rain; open AM, PM risk",
+                    rain_event.total_in
+                ),
+                blurb: "maybe closed PM".into(),
+                closure_status: ClosureStatus::Possible,
+            };
+        }
         return DrainageStatus {
             quality: 0.05,
             daylight_fraction: 0.0,
@@ -346,14 +363,18 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
     DrainageStatus {
         quality: daylight_fraction,
         daylight_fraction,
-        note: format!(
-            "{:.2} in rain; may cause a temporary closure",
-            rain_event.total_in
-        ),
-        blurb: if reopen_hour <= 14.0 {
-            "maybe closed in the morning".into()
+        note: if reopen_hour <= 14.0 {
+            format!(
+                "{:.2} in rain; maybe closed AM, open PM",
+                rain_event.total_in
+            )
         } else {
-            "maybe closed today".into()
+            format!("{:.2} in rain; maybe closed", rain_event.total_in)
+        },
+        blurb: if reopen_hour <= 14.0 {
+            "maybe closed AM".into()
+        } else {
+            "maybe closed".into()
         },
         closure_status: ClosureStatus::Possible,
     }
@@ -363,11 +384,14 @@ struct RainEvent {
     total_in: f64,
     /// End hour relative to the start of the scored day.
     end_hour: f64,
+    /// Start hour relative to the start of the scored day.
+    start_hour: f64,
 }
 
 fn latest_meaningful_rain_event(days: &[DayWeather], idx: usize, p: &Params) -> Option<RainEvent> {
     let mut total_in = 0.0;
     let mut end_hour = None;
+    let mut start_hour = None;
     let mut dry_hours = 0usize;
 
     for day_idx in (0..=idx).rev() {
@@ -390,13 +414,17 @@ fn latest_meaningful_rain_event(days: &[DayWeather], idx: usize, p: &Params) -> 
                         return Some(RainEvent {
                             total_in,
                             end_hour: end_hour.expect("rain event has an end hour"),
+                            start_hour: start_hour.expect("rain event has a start hour"),
                         });
                     }
                     total_in = 0.0;
                     end_hour = None;
                 }
                 total_in += amount;
-                end_hour.get_or_insert(hour as f64 + 1.0 - (idx - day_idx) as f64 * 24.0);
+                let rel_hour = hour as f64 - (idx - day_idx) as f64 * 24.0;
+                end_hour.get_or_insert(rel_hour + 1.0);
+                // Walking backward, so the last non-zero hour seen is the start.
+                start_hour = Some(rel_hour);
                 dry_hours = 0;
             } else if end_hour.is_some() {
                 dry_hours += 1;
@@ -407,6 +435,7 @@ fn latest_meaningful_rain_event(days: &[DayWeather], idx: usize, p: &Params) -> 
     (total_in >= p.significant_rain_in).then(|| RainEvent {
         total_in,
         end_hour: end_hour.expect("meaningful rain event has an end hour"),
+        start_hour: start_hour.expect("meaningful rain event has a start hour"),
     })
 }
 
@@ -886,7 +915,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "maybe closed in the morning");
+        assert_eq!(scored[0].blurb, "maybe closed AM");
         assert_eq!(scored[0].closure_status, ClosureStatus::Possible);
         assert_eq!(scored[1].blurb, "likely open");
         assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
@@ -895,6 +924,35 @@ mod tests {
             ((scored[0].score / scored[1].score) - (7.5 / 13.0)).abs() < 1e-9,
             "daylight availability should be applied once"
         );
+    }
+
+    #[test]
+    fn markham_afternoon_rain_open_am() {
+        // Afternoon storm: rain at hours 15-16, trail open all morning.
+        let mut rain = day("2026-07-02", 0.52, 90.0);
+        rain.precip_prob_max = 22.0;
+        rain.precip_prob_ride_max = 4.0;
+        rain.precip_hourly_in[15] = 0.40;
+        rain.precip_hourly_in[16] = 0.12;
+        let days = vec![rain, day("2026-07-03", 0.0, 80.0)];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::Markham),
+        );
+
+        assert_eq!(scored[0].blurb, "maybe closed PM");
+        assert_eq!(scored[0].closure_status, ClosureStatus::Possible);
+        // Morning was rideable, so score should reflect partial daylight.
+        assert!(
+            scored[0].score > 0.0,
+            "afternoon rain should not zero out the score: got {:.3}",
+            scored[0].score
+        );
+        // Day after is clear.
+        assert_eq!(scored[1].blurb, "likely open");
+        assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
     }
 
     #[test]
