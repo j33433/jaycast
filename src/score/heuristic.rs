@@ -244,7 +244,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         Some(h) => format!("rain ended ~{h:.0}h ago - drying out"),
     };
 
-    let amount_note = if antecedent < p.min_useful_rain_in {
+    let amount_note = if antecedent >= p.significant_rain_in && antecedent < p.min_useful_rain_in {
         "some recent rain".into()
     } else if antecedent > p.max_useful_rain_in {
         format!("{antecedent:.2} in recent rain (heavy - may stay soft or puddled)")
@@ -625,18 +625,13 @@ pub fn score_color(score: f64) -> String {
 
 fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> String {
     if day.precip_in >= 0.25 {
-        let wet = wet_period_blurb(day);
-        return if p.model == RideabilityModel::MixedSurface {
-            format!("{wet} - trail remains open")
-        } else {
-            wet
-        };
+        return wet_period_blurb(day);
     }
     if pack_q >= 0.7 {
         return if p.model == RideabilityModel::MixedSurface {
-            "firm mixed-surface window".into()
+            "good".into()
         } else {
-            "firm sand window".into()
+            "firm sand".into()
         };
     }
     if pack_q <= 0.35 {
