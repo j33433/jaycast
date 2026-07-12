@@ -1,8 +1,18 @@
-//! Tunable thresholds for the sand-pack rideability heuristic.
+//! Tunable thresholds for the trail rideability heuristics.
 //! Units: inches, °F, mph, hours/days.
+
+use crate::trails::Trail;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RideabilityModel {
+    SandPack,
+    Drainage,
+    MixedSurface,
+}
 
 #[derive(Clone, Debug)]
 pub struct Params {
+    pub model: RideabilityModel,
     /// Significant rain event threshold (inches/day).
     pub significant_rain_in: f64,
     /// Ideal antecedent rain sum over the pack window (inches).
@@ -17,6 +27,10 @@ pub struct Params {
     pub ideal_hours_since_rain: f64,
     /// After this many dry hours, pack benefit fades out.
     pub pack_fade_hours: f64,
+    /// Baseline timing quality after a long dry spell.
+    pub dry_timing_floor: f64,
+    /// Hours after meaningful rain that Markham may remain closed while draining.
+    pub drainage_hours: f64,
     /// Ride-window rain amount that starts a real "rained-on ride" penalty (inches).
     pub ride_day_precip_soft: f64,
     /// Ride-window rain amount that fully tanks the ride (inches).
@@ -47,6 +61,7 @@ pub struct Params {
 impl Default for Params {
     fn default() -> Self {
         Self {
+            model: RideabilityModel::SandPack,
             significant_rain_in: 0.25,
             ideal_antecedent_in: 1.0,
             min_useful_rain_in: 0.35,
@@ -54,6 +69,8 @@ impl Default for Params {
             pack_lookback_hours: 48.0,
             ideal_hours_since_rain: 18.0,
             pack_fade_hours: 72.0, // ~3 days
+            dry_timing_floor: 0.1,
+            drainage_hours: 48.0,
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
             et0_dry_ref: 0.20,
@@ -70,5 +87,33 @@ impl Default for Params {
             w_weather: 0.35,
             w_confidence: 0.10,
         }
+    }
+}
+
+impl Params {
+    pub fn for_trail(trail: Trail) -> Self {
+        let mut params = Self::default();
+        match trail {
+            Trail::CampMurphy => {}
+            Trail::Markham => {
+                params.model = RideabilityModel::Drainage;
+                params.significant_rain_in = 0.05;
+                params.w_pack = 0.55;
+                params.w_weather = 0.35;
+            }
+            Trail::QuietWaters => {
+                params.model = RideabilityModel::MixedSurface;
+                params.min_useful_rain_in = 0.55;
+                params.ideal_antecedent_in = 1.25;
+                params.max_useful_rain_in = 4.0;
+                params.pack_lookback_hours = 72.0;
+                params.ideal_hours_since_rain = 30.0;
+                params.pack_fade_hours = 120.0;
+                params.dry_timing_floor = 0.55;
+                params.w_pack = 0.35;
+                params.w_weather = 0.55;
+            }
+        }
+        params
     }
 }

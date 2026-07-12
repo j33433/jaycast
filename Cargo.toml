@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 autobins = false
 license = "GPL-3.0-or-later"
-description = "Forecast the best days for riding Camp Murphy's sandy MTB trails at Jonathan Dickinson State Park, FL"
+description = "Weather-informed rideability forecasts for South Florida MTB trails"
 repository = "https://github.com/j33433/jaycast"
 
 [lib]
@@ -18,7 +18,7 @@ serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std", "wasmbind"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Window", "Storage", "MediaQueryList", "Document", "Element"] }
+web-sys = { version = "0.3", features = ["Window", "Storage", "History", "Location", "MediaQueryList", "Document", "Element"] }
 console_error_panic_hook = "0.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

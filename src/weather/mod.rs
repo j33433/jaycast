@@ -1,4 +1,4 @@
-//! Open-Meteo weather client for Camp Murphy.
+//! Open-Meteo weather client for the selected trail.
 
 mod types;
 
@@ -7,12 +7,9 @@ pub use types::*;
 use gloo_net::http::Request;
 use web_sys::window;
 
-/// Camp Murphy MTB Trails, Jonathan Dickinson State Park
-pub const LAT: f64 = 27.012260963502648;
-pub const LON: f64 = -80.11081837620299;
+use crate::trails::Trail;
+
 pub const TIMEZONE: &str = "America/New_York";
-pub const LOCATION_NAME: &str = "Camp Murphy MTB Trails";
-pub const LOCATION_SUB: &str = "Jonathan Dickinson State Park, FL";
 
 /// Past days of history (pack model lookback + browseable archive).
 pub const PAST_DAYS: u32 = 30;
@@ -60,11 +57,12 @@ impl WeatherModel {
         }
     }
 
-    fn cache_key(self) -> &'static str {
-        match self {
-            WeatherModel::GfsSeamless => "jaycast:om:v9-gfs",
-            WeatherModel::Ecmwf => "jaycast:om:v9-ecmwf",
-        }
+    fn cache_key(self, trail: Trail) -> String {
+        format!(
+            "jaycast:om:v10:{}:{}",
+            trail.slug(),
+            self.short().to_lowercase()
+        )
     }
 }
 
@@ -96,12 +94,13 @@ struct CacheEntry {
     payload: ForecastResponse,
 }
 
-pub async fn fetch_forecast(model: WeatherModel) -> Result<ForecastResponse, String> {
-    if let Some(cached) = load_cache(model.cache_key(), None, None) {
+pub async fn fetch_forecast(model: WeatherModel, trail: Trail) -> Result<ForecastResponse, String> {
+    let cache_key = model.cache_key(trail);
+    if let Some(cached) = load_cache(&cache_key, None, None) {
         return Ok(cached);
     }
 
-    let url = build_url(model);
+    let url = build_url(model, trail);
     let resp = Request::get(&url)
         .send()
         .await
@@ -116,7 +115,7 @@ pub async fn fetch_forecast(model: WeatherModel) -> Result<ForecastResponse, Str
         .await
         .map_err(|e| format!("Failed to parse weather data: {e}"))?;
 
-    save_cache(model.cache_key(), None, None, &payload);
+    save_cache(&cache_key, None, None, &payload);
     Ok(payload)
 }
 
@@ -124,14 +123,16 @@ pub async fn fetch_forecast(model: WeatherModel) -> Result<ForecastResponse, Str
 pub async fn fetch_historical_analysis(
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
+    trail: Trail,
 ) -> Result<ForecastResponse, String> {
     let start_s = start.to_string();
     let end_s = end.to_string();
-    if let Some(cached) = load_cache(HISTORY_CACHE_KEY, Some(&start_s), Some(&end_s)) {
+    let cache_key = history_cache_key(trail);
+    if let Some(cached) = load_cache(&cache_key, Some(&start_s), Some(&end_s)) {
         return Ok(cached);
     }
 
-    let resp = Request::get(&build_historical_url(start, end))
+    let resp = Request::get(&build_historical_url(start, end, trail))
         .send()
         .await
         .map_err(|e| format!("Historical weather network error: {e}"))?;
@@ -148,7 +149,7 @@ pub async fn fetch_historical_analysis(
         .await
         .map_err(|e| format!("Failed to parse historical weather data: {e}"))?;
 
-    save_cache(HISTORY_CACHE_KEY, Some(&start_s), Some(&end_s), &payload);
+    save_cache(&cache_key, Some(&start_s), Some(&end_s), &payload);
     Ok(payload)
 }
 
@@ -164,13 +165,15 @@ pub fn combine_history_and_forecast(
     history
 }
 
-fn build_url(model: WeatherModel) -> String {
+fn build_url(model: WeatherModel, trail: Trail) -> String {
     // Completed days come from historical analysis, so only future days are needed here.
     let mut url = format!(
-        "{}?latitude={LAT}&longitude={LON}\
+        "{}?latitude={}&longitude={}\
          &timezone={TIMEZONE}\
          &past_days=1&forecast_days={FORECAST_DAYS}",
-        model.endpoint()
+        model.endpoint(),
+        trail.latitude(),
+        trail.longitude(),
     );
 
     if let Some(m) = model.models_param() {
@@ -187,10 +190,13 @@ pub fn build_date_range_url(
     model: WeatherModel,
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
+    trail: Trail,
 ) -> String {
     let mut url = format!(
-        "{}?latitude={LAT}&longitude={LON}&timezone={TIMEZONE}&start_date={start}&end_date={end}",
-        model.endpoint()
+        "{}?latitude={}&longitude={}&timezone={TIMEZONE}&start_date={start}&end_date={end}",
+        model.endpoint(),
+        trail.latitude(),
+        trail.longitude(),
     );
 
     if let Some(m) = model.models_param() {
@@ -202,10 +208,16 @@ pub fn build_date_range_url(
 }
 
 /// Build an Open-Meteo historical analysis request for completed past days.
-pub fn build_historical_url(start: chrono::NaiveDate, end: chrono::NaiveDate) -> String {
+pub fn build_historical_url(
+    start: chrono::NaiveDate,
+    end: chrono::NaiveDate,
+    trail: Trail,
+) -> String {
     let mut url = format!(
-        "https://archive-api.open-meteo.com/v1/archive?latitude={LAT}&longitude={LON}\
-         &timezone={TIMEZONE}&start_date={start}&end_date={end}&models=ecmwf_ifs"
+        "https://archive-api.open-meteo.com/v1/archive?latitude={}&longitude={}\
+         &timezone={TIMEZONE}&start_date={start}&end_date={end}&models=ecmwf_ifs",
+        trail.latitude(),
+        trail.longitude(),
     );
     append_weather_fields(&mut url);
     url
@@ -259,11 +271,15 @@ fn save_cache(
     }
 }
 
-pub fn clear_cache(model: WeatherModel) {
+pub fn clear_cache_for_trail(model: WeatherModel, trail: Trail) {
     if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
-        let _ = storage.remove_item(model.cache_key());
-        let _ = storage.remove_item(HISTORY_CACHE_KEY);
+        let _ = storage.remove_item(&model.cache_key(trail));
+        let _ = storage.remove_item(&history_cache_key(trail));
     }
+}
+
+fn history_cache_key(trail: Trail) -> String {
+    format!("{HISTORY_CACHE_KEY}:{}", trail.slug())
 }
 
 #[cfg(test)]
@@ -301,5 +317,19 @@ mod tests {
         assert_eq!(days.len(), 3);
         assert_eq!(days[1].precip_in, 0.4);
         assert_eq!(days[2].precip_in, 0.2);
+    }
+
+    #[test]
+    fn trail_requests_and_caches_are_location_specific() {
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 7, 11).unwrap();
+        let markham = build_date_range_url(WeatherModel::Ecmwf, date, date, Trail::Markham);
+        let quiet = build_date_range_url(WeatherModel::Ecmwf, date, date, Trail::QuietWaters);
+
+        assert!(markham.contains("latitude=26.129830519474492"));
+        assert!(quiet.contains("latitude=26.31012294823712"));
+        assert_ne!(
+            WeatherModel::Ecmwf.cache_key(Trail::Markham),
+            WeatherModel::Ecmwf.cache_key(Trail::QuietWaters)
+        );
     }
 }

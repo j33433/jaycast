@@ -1,8 +1,9 @@
-//! jaycast — forecast the best days for riding Camp Murphy
+//! jaycast - weather-informed MTB trail rideability forecasts
 
 mod app;
 pub mod score;
 mod theme;
+pub mod trails;
 pub mod weather;
 
 use leptos::prelude::*;

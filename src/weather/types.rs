@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-/// Camp Murphy opens at 8 AM; rain during this window affects the ride directly.
+/// Rain during the usual 8 AM-noon ride window affects rideability directly.
 const RIDE_START_HOUR: u32 = 8;
 const RIDE_END_HOUR: u32 = 12;
 /// Park closes at sundown. Florida summer sunset is ~8 PM local; hours from this

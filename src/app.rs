@@ -6,7 +6,8 @@ use crate::score::{score_color, score_days, DayForecast, Params};
 use crate::theme::{
     apply_theme, apply_theme_color, detect_os_theme, load_theme_pref, save_theme_pref, Theme,
 };
-use crate::weather::{self, WeatherModel, LOCATION_NAME, LOCATION_SUB, VIEW_DAYS};
+use crate::trails::{self, Trail};
+use crate::weather::{self, WeatherModel, VIEW_DAYS};
 
 #[derive(Clone)]
 enum LoadState {
@@ -22,6 +23,8 @@ pub fn App() -> impl IntoView {
     let view_start = RwSignal::new(0usize);
     let refreshed_at = RwSignal::new(String::new());
     let model = RwSignal::new(weather::load_model_pref());
+    let trail = RwSignal::new(trails::load_trail_pref());
+    let location_dialog_open = RwSignal::new(false);
     let grid_lat = RwSignal::new(0.0f64);
     let grid_lon = RwSignal::new(0.0f64);
     let theme = RwSignal::new(load_theme_pref().unwrap_or_else(detect_os_theme));
@@ -36,16 +39,20 @@ pub fn App() -> impl IntoView {
 
     let load = move || {
         let m = model.get_untracked();
+        let t = trail.get_untracked();
         let first = is_first_load.get_untracked();
         state.set(LoadState::Loading);
         spawn_local(async move {
-            match weather::fetch_forecast(m).await {
+            match weather::fetch_forecast(m, t).await {
                 Ok(forecast) => {
                     let today = Local::now().date_naive();
                     let history_start = today - Duration::days(weather::PAST_DAYS.into());
                     let history_end = today - Duration::days(1);
-                    match weather::fetch_historical_analysis(history_start, history_end).await {
+                    match weather::fetch_historical_analysis(history_start, history_end, t).await {
                         Ok(history) => {
+                            if model.get_untracked() != m || trail.get_untracked() != t {
+                                return;
+                            }
                             grid_lat.set(forecast.latitude);
                             grid_lon.set(forecast.longitude);
                             let days = weather::combine_history_and_forecast(
@@ -53,7 +60,7 @@ pub fn App() -> impl IntoView {
                                 forecast.days(),
                                 today,
                             );
-                            let scored = score_days(&days, today, &Params::default());
+                            let scored = score_days(&days, today, &Params::for_trail(t));
 
                             let today_idx = scored
                                 .iter()
@@ -84,10 +91,18 @@ pub fn App() -> impl IntoView {
                             refreshed_at.set(Local::now().format("%-I:%M %p").to_string());
                             state.set(LoadState::Ready(scored));
                         }
-                        Err(e) => state.set(LoadState::Error(e)),
+                        Err(e) => {
+                            if model.get_untracked() == m && trail.get_untracked() == t {
+                                state.set(LoadState::Error(e));
+                            }
+                        }
                     }
                 }
-                Err(e) => state.set(LoadState::Error(e)),
+                Err(e) => {
+                    if model.get_untracked() == m && trail.get_untracked() == t {
+                        state.set(LoadState::Error(e));
+                    }
+                }
             }
         });
     };
@@ -105,32 +120,74 @@ pub fn App() -> impl IntoView {
         load();
     };
 
+    let switch_trail = move |new_trail: Trail| {
+        if trail.get_untracked() == new_trail {
+            location_dialog_open.set(false);
+            return;
+        }
+        trails::save_trail_pref(new_trail);
+        trails::update_trail_url(new_trail);
+        trail.set(new_trail);
+        selected.set(None);
+        view_start.set(0);
+        is_first_load.set(true);
+        location_dialog_open.set(false);
+        load();
+    };
+
     view! {
         <div id="app">
             <header class="header">
-                <img
-                    class="jay-mark"
-                    src="/jaycast/jaycast-plain.svg"
-                    width="100"
-                    height="100"
-                    alt=""
-                />
+                {move || {
+                    if trail.get() == Trail::CampMurphy {
+                        view! {
+                            <img
+                                class="camp-murphy-mark"
+                                src="/jaycast/jaycast-plain.svg"
+                                width="100"
+                                height="100"
+                                alt=""
+                            />
+                        }
+                        .into_any()
+                    } else {
+                        view! {
+                            <div class="trail-mark" aria-hidden="true">
+                                {trail.get().initials()}
+                            </div>
+                        }
+                        .into_any()
+                    }
+                }}
                 <div class="header-text">
                     <h1>"jay" <span>"cast"</span></h1>
-                    <span class="tagline">"scrub trail pack"</span>
+                    <span class="tagline">{move || trail.get().tagline()}</span>
                     <p class="location">
-                        {LOCATION_NAME}
+                        {move || trail.get().name()}
                         <br/>
-                        {LOCATION_SUB}
+                        {move || trail.get().location()}
                     </p>
+                    <button
+                        type="button"
+                        class="location-change"
+                        on:click=move |_| location_dialog_open.set(true)
+                    >
+                        "change location"
+                    </button>
                 </div>
             </header>
+
+            <LocationDialog
+                open=location_dialog_open
+                selected=trail
+                on_change=Callback::new(switch_trail)
+            />
 
             {move || match state.get() {
                 LoadState::Loading => view! { <LoadingView /> }.into_any(),
                 LoadState::Error(msg) => view! {
                     <ErrorView message=msg on_retry=Callback::new(move |_| {
-                        weather::clear_cache(model.get_untracked());
+                        weather::clear_cache_for_trail(model.get_untracked(), trail.get_untracked());
                         load();
                     }) />
                 }.into_any(),
@@ -141,6 +198,7 @@ pub fn App() -> impl IntoView {
                         view_start=view_start
                         refreshed_at=refreshed_at
                         model=model
+                        trail=trail
                         grid_lat=grid_lat
                         grid_lon=grid_lon
                         theme=theme
@@ -149,6 +207,85 @@ pub fn App() -> impl IntoView {
                 }.into_any(),
             }}
         </div>
+    }
+}
+
+#[component]
+fn LocationDialog(
+    open: RwSignal<bool>,
+    selected: RwSignal<Trail>,
+    on_change: Callback<Trail>,
+) -> impl IntoView {
+    view! {
+        {move || open.get().then(|| {
+            view! {
+                <div class="location-backdrop" role="presentation" on:click=move |_| open.set(false)>
+                    <section
+                        class="location-dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="location-dialog-title"
+                        on:click=move |event| event.stop_propagation()
+                    >
+                        <div class="location-dialog-head">
+                            <div>
+                                <p class="label">"Trail location"</p>
+                                <h2 id="location-dialog-title">"Choose a trail"</h2>
+                            </div>
+                            <button
+                                type="button"
+                                class="dialog-close"
+                                aria-label="Close location chooser"
+                                on:click=move |_| open.set(false)
+                            >
+                                "x"
+                            </button>
+                        </div>
+                        <div class="location-options">
+                            {Trail::ALL.into_iter().map(|trail| {
+                                let initials = trail.initials();
+                                let name = trail.name();
+                                let location = trail.location();
+                                let icon = if trail == Trail::CampMurphy {
+                                    view! {
+                                        <img
+                                            class="location-icon camp-murphy-option-icon"
+                                            src="/jaycast/jaycast-plain.svg"
+                                            alt=""
+                                        />
+                                    }
+                                    .into_any()
+                                } else {
+                                    view! {
+                                        <span class="location-icon" aria-hidden="true">{initials}</span>
+                                    }
+                                    .into_any()
+                                };
+                                view! {
+                                    <button
+                                        type="button"
+                                        class=move || {
+                                            if selected.get() == trail {
+                                                "location-option selected"
+                                            } else {
+                                                "location-option"
+                                            }
+                                        }
+                                        on:click=move |_| on_change.run(trail)
+                                    >
+                                        {icon}
+                                        <span class="location-option-copy">
+                                            <strong>{name}</strong>
+                                            <span>{location}</span>
+                                        </span>
+                                    </button>
+                                }
+                            }).collect_view()}
+                        </div>
+                    </section>
+                </div>
+            }
+        })}
     }
 }
 
@@ -183,6 +320,7 @@ fn ReadyView(
     view_start: RwSignal<usize>,
     refreshed_at: RwSignal<String>,
     model: RwSignal<WeatherModel>,
+    trail: RwSignal<Trail>,
     grid_lat: RwSignal<f64>,
     grid_lon: RwSignal<f64>,
     theme: RwSignal<Theme>,
@@ -197,17 +335,20 @@ fn ReadyView(
             days=days_hero
             refreshed_at=refreshed_at
             model=model
+            trail=trail
             grid_lat=grid_lat
             grid_lon=grid_lon
             theme=theme
             on_switch=on_switch
         />
         <TimelineNav days=days_nav view_start=view_start selected=selected />
-        <Timeline days=days_list view_start=view_start selected=selected />
+        <Timeline days=days_list view_start=view_start selected=selected trail=trail />
         <footer class="footer">
             <p>
-                "Forecasts the best days for riding Camp Murphy sand. "
-                "Not trail status. Use your own judgment."
+                {move || format!(
+                    "Forecasts weather-informed rideability for {}. Not official trail status. Use your own judgment.",
+                    trail.get().short_name()
+                )}
             </p>
             <p>
                 "Completed days use ECMWF IFS historical analysis; today onward uses "
@@ -240,6 +381,7 @@ fn Hero(
     days: Vec<DayForecast>,
     refreshed_at: RwSignal<String>,
     model: RwSignal<WeatherModel>,
+    trail: RwSignal<Trail>,
     grid_lat: RwSignal<f64>,
     grid_lon: RwSignal<f64>,
     theme: RwSignal<Theme>,
@@ -344,8 +486,8 @@ fn Hero(
                                 return String::new();
                             }
                             let km = haversine_km(
-                                weather::LAT,
-                                weather::LON,
+                                trail.get().latitude(),
+                                trail.get().longitude(),
                                 lat,
                                 lon,
                             );
@@ -467,6 +609,7 @@ fn Timeline(
     days: Vec<DayForecast>,
     view_start: RwSignal<usize>,
     selected: RwSignal<Option<NaiveDate>>,
+    trail: RwSignal<Trail>,
 ) -> impl IntoView {
     view! {
         <div class="timeline" role="list">
@@ -566,7 +709,9 @@ fn Timeline(
                                 </button>
                                 {move || {
                                     (selected.get() == Some(date))
-                                        .then(|| day_detail_view(detail.clone()))
+                                        .then(|| {
+                                            day_detail_view(detail.clone(), trail.get_untracked())
+                                        })
                                 }}
                             </div>
                         }
@@ -577,12 +722,20 @@ fn Timeline(
     }
 }
 
-fn day_detail_view(d: DayForecast) -> impl IntoView {
-    let score_line = format!(
-        "score {:.0}% · {:.0}% rain chance 8 AM-noon",
-        d.score * 100.0,
-        d.precip_prob_ride_max
-    );
+fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
+    let score_line = if trail == Trail::Markham {
+        format!(
+            "score {:.0}% · drainage advisory; {:.0}% rain chance 8 AM-noon",
+            d.score * 100.0,
+            d.precip_prob_ride_max
+        )
+    } else {
+        format!(
+            "score {:.0}% · {:.0}% rain chance 8 AM-noon",
+            d.score * 100.0,
+            d.precip_prob_ride_max
+        )
+    };
     let tint = score_style(d.score);
     view! {
         <section class="detail" style=tint>

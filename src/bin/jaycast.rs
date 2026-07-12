@@ -3,6 +3,7 @@ use std::{env, process};
 use chrono::{Duration, Local, NaiveDate};
 use jaycast::{
     score::{score_days, DayForecast, Params},
+    trails::Trail,
     weather::{
         build_date_range_url, build_historical_url, DayWeather, ForecastResponse, WeatherModel,
     },
@@ -30,6 +31,13 @@ fn run() -> Result<(), String> {
 
 fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
     let first = args.next();
+    let (trail, first) = match first {
+        Some(value) => match Trail::from_slug(&value) {
+            Some(trail) => (trail, args.next()),
+            None => (Trail::CampMurphy, Some(value)),
+        },
+        None => (Trail::CampMurphy, None),
+    };
     let today = Local::now().date_naive();
     let (start, end, model) = match first {
         Some(value) if matches!(value.as_str(), "gfs" | "ecmwf" | "both") => (today, today, value),
@@ -54,7 +62,7 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         .then(|| {
             let history_end = today - Duration::days(1);
             fetch_forecast(
-                build_historical_url(fetch_start, history_end),
+                build_historical_url(fetch_start, history_end, trail),
                 "historical IFS analysis",
             )
         })
@@ -77,6 +85,7 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
             history_end,
             &historical_days,
             today,
+            trail,
         )?;
     }
 
@@ -84,7 +93,7 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         let forecast_start = fetch_start.max(today);
         for model in models {
             let response = fetch_forecast(
-                build_date_range_url(model, forecast_start, end),
+                build_date_range_url(model, forecast_start, end, trail),
                 model.short(),
             )?;
             let mut days = historical_days.clone();
@@ -98,6 +107,7 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
                 end,
                 &days,
                 today,
+                trail,
             )?;
         }
     }
@@ -120,8 +130,9 @@ fn print_range_analysis(
     end: NaiveDate,
     days: &[DayWeather],
     today: NaiveDate,
+    trail: Trail,
 ) -> Result<(), String> {
-    let scores = score_days(days, today, &Params::default());
+    let scores = score_days(days, today, &Params::for_trail(trail));
 
     let mut date = start;
     loop {
@@ -203,7 +214,9 @@ fn format_three_hour(values: &[f64; 8], precision: usize) -> String {
 }
 
 fn print_help() {
-    eprintln!("Usage: jaycast analyze [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]");
+    eprintln!(
+        "Usage: jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]"
+    );
 }
 
 #[cfg(test)]
