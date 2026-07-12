@@ -614,6 +614,11 @@ fn Timeline(
                         let date_s = format_short(date);
                         let tint = score_style(d.score);
                         let detail = d.clone();
+                        let possible_closure = d.closure_status.is_possible();
+                        let facebook_advisory = possible_closure
+                            && date >= Local::now().date_naive()
+                            && date <= Local::now().date_naive() + Duration::days(1);
+                        let card_label = format!("Show details for {date_s}");
                         let dow = if is_today {
                             "Today".to_string()
                         } else if date == Local::now().date_naive() - Duration::days(1) {
@@ -625,8 +630,7 @@ fn Timeline(
                         };
                         view! {
                             <div class="day-row" role="listitem">
-                                <button
-                                    type="button"
+                                <div
                                     class=move || {
                                         let mut c = String::from("day-card");
                                         if is_best {
@@ -647,6 +651,11 @@ fn Timeline(
                                         c
                                     }
                                     style=tint
+                                >
+                                    <button
+                                        type="button"
+                                        class="day-card-select"
+                                        aria-label=card_label
                                     on:click=move |_| {
                                         if selected.get() == Some(date) {
                                             selected.set(None);
@@ -654,7 +663,7 @@ fn Timeline(
                                             selected.set(Some(date));
                                         }
                                     }
-                                >
+                                    ></button>
                                     <svg
                                         class="cloud-wave"
                                         viewBox="0 0 100 100"
@@ -679,13 +688,33 @@ fn Timeline(
                                     </div>
                                     <div class="mid">
                                         <div class="stars-sm">{stars}</div>
-                                        <div class="blurb">{blurb}</div>
+                                        <div class="blurb">
+                                            {blurb}
+                                            {move || {
+                                                (trail.get() == Trail::Markham && facebook_advisory).then(|| {
+                                                    view! {
+                                                        <span class="facebook-status-copy">
+                                                            " - Check "
+                                                            <a
+                                                                class="facebook-status-link"
+                                                                href="https://www.facebook.com/groups/MarkhamParkMTB"
+                                                                target="_blank"
+                                                                rel="noopener"
+                                                            >
+                                                                "Facebook"
+                                                            </a>
+                                                            " for status"
+                                                        </span>
+                                                    }
+                                                })
+                                            }}
+                                        </div>
                                     </div>
                                     <div class="precip">
                                         {precip}
                                         <span class="temp">{temp}</span>
                                     </div>
-                                </button>
+                                </div>
                                 {move || {
                                     (selected.get() == Some(date))
                                         .then(|| {
@@ -705,7 +734,7 @@ fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
     let facebook_advisory = trail == Trail::Markham
         && d.date >= Local::now().date_naive()
         && d.date <= Local::now().date_naive() + Duration::days(1)
-        && d.blurb.starts_with("possibly closed");
+        && d.closure_status.is_possible();
     let score_line = if trail == Trail::Markham {
         format!(
             "score {:.0}% · sunup-sundown drainage advisory",
@@ -724,7 +753,15 @@ fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
             <p class="score-line">{score_line}</p>
             {facebook_advisory.then(|| view! {
                 <p class="facebook-advisory">
-                    "Possible closure: check Facebook for current trail status."
+                    "Possible closure: check "
+                    <a
+                        href="https://www.facebook.com/groups/MarkhamParkMTB"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        "Facebook"
+                    </a>
+                    " for current trail status."
                 </p>
             })}
             <ul class="factors">

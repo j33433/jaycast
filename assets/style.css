@@ -624,6 +624,31 @@ body {
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, filter 0.15s;
 }
 
+/* The full-card button sits behind content so the inline Facebook link remains valid. */
+.day-card-select {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.day-card-select:focus-visible {
+  border-radius: var(--radius);
+  outline: 2px solid var(--jay);
+  outline-offset: -3px;
+}
+
+.day-card > :not(.day-card-select, .rain-wave, .cloud-wave) {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* The curves compare morning (left) with afternoon/evening (right). */
 .rain-wave,
 .cloud-wave {
@@ -646,7 +671,7 @@ body {
 }
 
 .day-card:hover,
-.day-card:focus-visible {
+.day-card:has(.day-card-select:focus-visible) {
   border-color: var(--score-color);
   filter: brightness(1.04);
   outline: none;
@@ -737,6 +762,13 @@ body {
   margin-top: 0.2rem;
 }
 
+.day-card .facebook-status-link {
+  pointer-events: auto;
+  color: var(--jay);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
 .day-card .precip {
   text-align: right;
   font-size: 0.8rem;
@@ -795,6 +827,10 @@ body {
   color: var(--warn);
   font-size: 0.85rem;
   font-weight: 650;
+}
+
+.detail .facebook-advisory a {
+  color: inherit;
 }
 
 .factors {

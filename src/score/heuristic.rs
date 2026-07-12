@@ -1,6 +1,6 @@
 //! Heuristic rideability score for sandy trails that pack after rain.
 
-use chrono::{Duration, NaiveDate};
+use chrono::NaiveDate;
 
 use crate::weather::DayWeather;
 
@@ -8,6 +8,7 @@ use super::params::{Params, RideabilityModel};
 
 const DAYLIGHT_START_HOUR: f64 = 7.0;
 const DAYLIGHT_END_HOUR: f64 = 20.0;
+const RAIN_EVENT_GAP_HOURS: usize = 3;
 
 #[derive(Clone, Debug)]
 pub struct Factor {
@@ -17,6 +18,19 @@ pub struct Factor {
     pub contribution: f64,
     /// Display bar 0..=1 for the raw subscore quality.
     pub quality: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClosureStatus {
+    NotApplicable,
+    Clear,
+    Possible,
+}
+
+impl ClosureStatus {
+    pub fn is_possible(&self) -> bool {
+        matches!(self, Self::Possible)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -37,6 +51,7 @@ pub struct DayForecast {
     pub temp_min_f: f64,
     pub precip_prob_max: f64,
     pub precip_prob_ride_max: f64,
+    pub closure_status: ClosureStatus,
     pub blurb: String,
 }
 
@@ -74,7 +89,7 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
     let drainage = (p.model == RideabilityModel::Drainage).then(|| drainage_status(days, idx, p));
     let (pack_q, pack_factors) = match drainage.as_ref() {
         Some(status) => (
-            status.quality,
+            1.0,
             vec![Factor {
                 name: "Trail status",
                 note: status.note.clone(),
@@ -124,18 +139,14 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
     factors.push(cf);
 
     let stars = score_to_stars(score);
-    let mut blurb = drainage
+    let blurb = drainage
         .as_ref()
         .map(|status| status.blurb.clone())
         .unwrap_or_else(|| make_blurb(day, pack_q, &factors, p));
-    if p.model == RideabilityModel::Drainage
-        && day.date >= today
-        && day.date <= today + Duration::days(1)
-        && blurb.starts_with("possibly closed")
-    {
-        blurb.push_str(" - check Facebook status");
-    }
-
+    let closure_status = drainage
+        .as_ref()
+        .map(|status| status.closure_status.clone())
+        .unwrap_or(ClosureStatus::NotApplicable);
     DayForecast {
         date: day.date,
         stars,
@@ -151,6 +162,7 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
         temp_min_f: day.temp_min_f,
         precip_prob_max: day.precip_prob_max,
         precip_prob_ride_max: day.precip_prob_ride_max,
+        closure_status,
         blurb,
     }
 }
@@ -294,25 +306,31 @@ struct DrainageStatus {
     daylight_fraction: f64,
     note: String,
     blurb: String,
+    closure_status: ClosureStatus,
 }
 
 fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatus {
-    let Some(rain_end_hour) = last_significant_rain_end_hour(days, idx, p) else {
+    let Some(rain_event) = latest_meaningful_rain_event(days, idx, p) else {
         return DrainageStatus {
             quality: 1.0,
             daylight_fraction: 1.0,
             note: "no recent drainage concern".into(),
             blurb: "drainage window likely clear".into(),
+            closure_status: ClosureStatus::Clear,
         };
     };
-    let reopen_hour = rain_end_hour + p.drainage_hours;
+    let reopen_hour = rain_event.end_hour + p.drainage_hours;
 
     if reopen_hour <= DAYLIGHT_START_HOUR {
         return DrainageStatus {
-            quality: 0.95,
+            quality: 1.0,
             daylight_fraction: 1.0,
-            note: "drainage should clear before sunup".into(),
+            note: format!(
+                "{:.2} in rain event; drainage should clear before sunup",
+                rain_event.total_in
+            ),
             blurb: "drainage window likely clear".into(),
+            closure_status: ClosureStatus::Clear,
         };
     }
     if reopen_hour >= DAYLIGHT_END_HOUR {
@@ -320,10 +338,11 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
             quality: 0.05,
             daylight_fraction: 0.0,
             note: format!(
-                "possibly closed through sundown - reopening likely after {}",
-                format_hour(reopen_hour)
+                "{:.2} in rain event; possibly closed through sundown",
+                rain_event.total_in
             ),
             blurb: "possibly closed through sundown".into(),
+            closure_status: ClosureStatus::Possible,
         };
     }
 
@@ -334,42 +353,67 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
         quality: daylight_fraction,
         daylight_fraction,
         note: format!(
-            "possibly closed at sunup - reopening likely after {}",
-            format_hour(reopen_hour)
+            "{:.2} in rain event; possibly closed while drainage clears",
+            rain_event.total_in
         ),
-        blurb: format!("possibly closed until {}", format_hour(reopen_hour)),
+        blurb: if reopen_hour <= 14.0 {
+            "possibly closed in the morning".into()
+        } else {
+            "possibly closed today".into()
+        },
+        closure_status: ClosureStatus::Possible,
     }
 }
 
-fn last_significant_rain_end_hour(days: &[DayWeather], idx: usize, p: &Params) -> Option<f64> {
-    for rain_idx in (0..=idx).rev() {
-        let rain_day = &days[rain_idx];
-        if rain_day.precip_in < p.significant_rain_in {
-            continue;
+struct RainEvent {
+    total_in: f64,
+    /// End hour relative to the start of the scored day.
+    end_hour: f64,
+}
+
+fn latest_meaningful_rain_event(days: &[DayWeather], idx: usize, p: &Params) -> Option<RainEvent> {
+    let mut total_in = 0.0;
+    let mut end_hour = None;
+    let mut dry_hours = 0usize;
+
+    for day_idx in (0..=idx).rev() {
+        let day = &days[day_idx];
+        let has_hourly_data = day.precip_hourly_in.iter().any(|amount| *amount > 0.0);
+        for hour in (0..24).rev() {
+            let amount = if has_hourly_data {
+                day.precip_hourly_in[hour]
+            } else if day.precip_in >= p.significant_rain_in && hour == 11 {
+                // Hourly data can be absent in an API response; place the daily
+                // total at midday as a conservative fallback.
+                day.precip_in
+            } else {
+                0.0
+            };
+
+            if amount > 0.0 {
+                if dry_hours > RAIN_EVENT_GAP_HOURS && end_hour.is_some() {
+                    if total_in >= p.significant_rain_in {
+                        return Some(RainEvent {
+                            total_in,
+                            end_hour: end_hour.expect("rain event has an end hour"),
+                        });
+                    }
+                    total_in = 0.0;
+                    end_hour = None;
+                }
+                total_in += amount;
+                end_hour.get_or_insert(hour as f64 + 1.0 - (idx - day_idx) as f64 * 24.0);
+                dry_hours = 0;
+            } else if end_hour.is_some() {
+                dry_hours += 1;
+            }
         }
-        let last_hour = rain_day
-            .precip_hourly_in
-            .iter()
-            .rposition(|amount| *amount > 0.0)
-            // Hourly data can be absent in an API response; use midday as a
-            // conservative fallback instead of claiming an early reopening.
-            .map(|hour| hour as f64 + 1.0)
-            .unwrap_or(12.0);
-        return Some(last_hour - (idx - rain_idx) as f64 * 24.0);
     }
-    None
-}
 
-fn format_hour(hour: f64) -> String {
-    let total_minutes = (hour * 60.0).round() as i32;
-    let hour_24 = (total_minutes.div_euclid(60)).rem_euclid(24);
-    let minute = total_minutes.rem_euclid(60);
-    let suffix = if hour_24 < 12 { "AM" } else { "PM" };
-    let hour_12 = match hour_24 % 12 {
-        0 => 12,
-        hour => hour,
-    };
-    format!("{hour_12}:{minute:02} {suffix}")
+    (total_in >= p.significant_rain_in).then(|| RainEvent {
+        total_in,
+        end_hour: end_hour.expect("meaningful rain event has an end hour"),
+    })
 }
 
 fn weather_quality(day: &DayWeather, p: &Params) -> (f64, Vec<Factor>) {
@@ -832,8 +876,10 @@ mod tests {
     }
 
     #[test]
-    fn markham_uses_hourly_rain_to_estimate_same_day_reopening() {
+    fn markham_uses_hourly_rain_for_same_day_closure() {
         let mut rain = day("2026-07-02", 0.213, 80.0);
+        rain.precip_prob_max = 10.0;
+        rain.precip_prob_ride_max = 10.0;
         rain.precip_hourly_in[0] = 0.039;
         rain.precip_hourly_in[1] = 0.126;
         rain.precip_hourly_in[2] = 0.035;
@@ -846,12 +892,31 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(
-            scored[0].blurb,
-            "possibly closed until 12:30 PM - check Facebook status"
-        );
+        assert_eq!(scored[0].blurb, "possibly closed in the morning");
+        assert_eq!(scored[0].closure_status, ClosureStatus::Possible);
         assert_eq!(scored[1].blurb, "drainage window likely clear");
+        assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
         assert!(scored[0].score < scored[1].score);
+        assert!(
+            ((scored[0].score / scored[1].score) - (7.5 / 13.0)).abs() < 1e-9,
+            "daylight availability should be applied once"
+        );
+    }
+
+    #[test]
+    fn markham_combines_rain_across_midnight() {
+        let mut before_midnight = day("2026-07-01", 0.07, 80.0);
+        before_midnight.precip_hourly_in[23] = 0.07;
+        let mut after_midnight = day("2026-07-02", 0.07, 80.0);
+        after_midnight.precip_hourly_in[1] = 0.07;
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(
+            &[before_midnight, after_midnight],
+            today,
+            &Params::for_trail(crate::trails::Trail::Markham),
+        );
+
+        assert_eq!(scored[1].closure_status, ClosureStatus::Possible);
     }
 
     #[test]
@@ -865,6 +930,7 @@ mod tests {
         );
 
         assert_eq!(scored[0].blurb, "drainage window likely clear");
+        assert_eq!(scored[0].closure_status, ClosureStatus::Clear);
     }
 
     #[test]
