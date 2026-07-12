@@ -335,8 +335,7 @@ fn ReadyView(
                 "."
             </p>
             <p>
-                {move || model.get().label()}
-                " via "
+                "Weather via "
                 <a href="https://open-meteo.com/" target="_blank" rel="noopener">
                     "Open-Meteo"
                 </a>
@@ -698,7 +697,7 @@ fn Timeline(
                                                 (trail.get() == Trail::Markham && facebook_status_link).then(|| {
                                                     view! {
                                                         <span class="facebook-status-copy">
-                                                            ", see "
+                                                            " · see "
                                                             <a
                                                                 class="facebook-status-link"
                                                                 href="https://www.facebook.com/groups/MarkhamParkMTB"
