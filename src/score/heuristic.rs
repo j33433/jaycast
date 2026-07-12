@@ -245,7 +245,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     };
 
     let amount_note = if antecedent < p.min_useful_rain_in {
-        format!("{antecedent:.2} in recent rain (more rain would firm the sand)")
+        "sandy with some recent rain".into()
     } else if antecedent > p.max_useful_rain_in {
         format!("{antecedent:.2} in recent rain (heavy - may stay soft or puddled)")
     } else {
