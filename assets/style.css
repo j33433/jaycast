@@ -357,7 +357,7 @@ body {
     );
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem 1.35rem;
+  padding: 1rem 1.35rem;
   margin-bottom: 1.5rem;
   box-shadow: var(--shadow);
   position: relative;
@@ -386,12 +386,18 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 0 0.9rem;
+  margin: 0 0 0.6rem;
 }
 
 .hero-top-bar .label {
   margin: 0;
-  padding-top: 0.3rem;
+  padding-top: 0;
+}
+
+.hero-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
 .hero-toggle {
@@ -489,15 +495,16 @@ body {
 
 .hero .day-name {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
 /* Score + day pairing */
 .hero .stars {
-  margin-top: 0.35rem;
-  font-size: 2.4rem;
+  margin-top: 0.25rem;
+  font-size: 2.1rem;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -506,7 +513,7 @@ body {
 }
 
 .hero .why {
-  margin: 0.55rem 8rem 0 0;
+  margin: 0.4rem 8rem 0 0;
   font-size: 0.95rem;
   color: var(--text-muted);
   padding-bottom: 0;
@@ -597,7 +604,7 @@ body {
 .day-card {
   --score-color: var(--border);
   display: grid;
-  grid-template-columns: 5.5rem 1fr auto;
+  grid-template-columns: 4.5rem 1fr auto;
   gap: 0.75rem;
   align-items: center;
   background:

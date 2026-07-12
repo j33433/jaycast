@@ -367,11 +367,18 @@ fn Hero(
     on_switch: Callback<WeatherModel>,
 ) -> impl IntoView {
     let best = days.iter().find(|d| d.best).cloned();
+    let day_name = best
+        .as_ref()
+        .map(|d| format_long(d.date))
+        .unwrap_or_else(|| "No forecast days".to_string());
 
     view! {
         <section class="hero">
             <div class="hero-top-bar">
-                <p class="label">"Best ride window"</p>
+                <div class="hero-headline">
+                    <p class="label">"Best ride window"</p>
+                    <h2 class="day-name">{day_name}</h2>
+                </div>
                 <div class="hero-toggle">
                     <div class="hero-controls">
                         <div class="model-toggle">
@@ -482,19 +489,16 @@ fn Hero(
             </div>
             {match best {
                 Some(d) => {
-                    let name = format_long(d.date);
                     let stars = stars_str(d.stars);
                     let blurb = d.blurb.clone();
                     let tint = score_style(d.score);
                     view! {
-                        <h2 class="day-name">{name}</h2>
                         <div class="stars" style=tint>{stars}</div>
                         <p class="why">{blurb}</p>
                     }
                     .into_any()
                 }
                 None => view! {
-                    <h2 class="day-name">"No forecast days"</h2>
                     <p class="why">"Try refreshing weather data."</p>
                 }
                 .into_any(),
@@ -694,7 +698,7 @@ fn Timeline(
                                                 (trail.get() == Trail::Markham && facebook_status_link).then(|| {
                                                     view! {
                                                         <span class="facebook-status-copy">
-                                                            " - Check "
+                                                            ", see "
                                                             <a
                                                                 class="facebook-status-link"
                                                                 href="https://www.facebook.com/groups/MarkhamParkMTB"
@@ -703,7 +707,6 @@ fn Timeline(
                                                             >
                                                                 "Facebook"
                                                             </a>
-                                                            " for status"
                                                         </span>
                                                     }
                                                 })

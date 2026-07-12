@@ -245,7 +245,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     };
 
     let amount_note = if antecedent < p.min_useful_rain_in {
-        "sandy with some recent rain".into()
+        "some recent rain".into()
     } else if antecedent > p.max_useful_rain_in {
         format!("{antecedent:.2} in recent rain (heavy - may stay soft or puddled)")
     } else {
@@ -334,8 +334,8 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
         return DrainageStatus {
             quality: 0.05,
             daylight_fraction: 0.0,
-            note: format!("{:.2} in rain; may be closed", rain_event.total_in),
-            blurb: "may be closed".into(),
+            note: format!("{:.2} in rain; maybe closed", rain_event.total_in),
+            blurb: "maybe closed".into(),
             closure_status: ClosureStatus::Possible,
         };
     }
@@ -351,9 +351,9 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
             rain_event.total_in
         ),
         blurb: if reopen_hour <= 14.0 {
-            "may be closed in the morning".into()
+            "maybe closed in the morning".into()
         } else {
-            "may be closed today".into()
+            "maybe closed today".into()
         },
         closure_status: ClosureStatus::Possible,
     }
@@ -886,7 +886,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "may be closed in the morning");
+        assert_eq!(scored[0].blurb, "maybe closed in the morning");
         assert_eq!(scored[0].closure_status, ClosureStatus::Possible);
         assert_eq!(scored[1].blurb, "likely open");
         assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
