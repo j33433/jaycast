@@ -148,8 +148,8 @@ pub fn App() -> impl IntoView {
                     <img
                         class="trail-logo"
                         src=move || trail.get().icon_src()
-                        width="100"
-                        height="100"
+                        width="161"
+                        height="161"
                         alt=""
                     />
                 </button>
