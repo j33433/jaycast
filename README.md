@@ -51,3 +51,5 @@ Camp Murphy uses roughly **pack 55% / weather 35% / confidence 10%**. Quiet Wate
 ## License
 
 GPL-3.0-or-later (see `LICENSE`).
+
+See [CODEMAP.md](CODEMAP.md) for a file-level map of the project.
