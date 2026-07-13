@@ -9,6 +9,7 @@ use super::params::{Params, RideabilityModel};
 const DAYLIGHT_START_HOUR: f64 = 7.0;
 const DAYLIGHT_END_HOUR: f64 = 20.0;
 const RAIN_EVENT_GAP_HOURS: usize = 3;
+const TRACE_RAIN_IN: f64 = 0.01;
 
 #[derive(Clone, Debug)]
 pub struct Factor {
@@ -408,7 +409,7 @@ fn latest_meaningful_rain_event(days: &[DayWeather], idx: usize, p: &Params) -> 
                 0.0
             };
 
-            if amount > 0.0 {
+            if amount >= TRACE_RAIN_IN {
                 if dry_hours > RAIN_EVENT_GAP_HOURS && end_hour.is_some() {
                     if total_in >= p.significant_rain_in {
                         return Some(RainEvent {
@@ -978,6 +979,30 @@ mod tests {
 
         assert_eq!(scored[0].blurb, "likely open");
         assert_eq!(scored[0].closure_status, ClosureStatus::Clear);
+    }
+
+    #[test]
+    fn markham_trailing_trace_does_not_extend_closure() {
+        // 0.185" rain at hours 19-20, then a 0.004" trace at hour 22.
+        // Without the trace filter, the trace extends end_hour to 23:00,
+        // pushing reopen to 7:30 AM and falsely flagging "maybe closed AM".
+        let mut rain = day("2026-07-12", 0.197, 92.0);
+        rain.precip_prob_max = 49.0;
+        rain.precip_prob_ride_max = 0.0;
+        rain.precip_hourly_in[19] = 0.039;
+        rain.precip_hourly_in[20] = 0.146;
+        rain.precip_hourly_in[22] = 0.004;
+        let next = day("2026-07-13", 0.0, 90.0);
+        let days = vec![rain, next];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 13).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::Markham),
+        );
+
+        assert_eq!(scored[1].blurb, "likely open");
+        assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
     }
 
     #[test]

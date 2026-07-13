@@ -1,4 +1,4 @@
-use std::{env, process};
+use std::{env, fs, process};
 
 use chrono::{Duration, Local, NaiveDate};
 use jaycast::{
@@ -21,6 +21,7 @@ fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
     match args.next().as_deref() {
         Some("analyze") => analyze(args),
+        Some("backtest") => backtest(args),
         Some("--help" | "-h" | "help") | None => {
             print_help();
             Ok(())
@@ -213,9 +214,100 @@ fn format_three_hour(values: &[f64; 8], precision: usize) -> String {
         .join(" | ")
 }
 
+fn backtest(mut args: impl Iterator<Item = String>) -> Result<(), String> {
+    let path = args.next().ok_or_else(|| {
+        "missing fixture path; usage: jaycast backtest <file> [camp-murphy|markham|quiet-waters]"
+            .to_string()
+    })?;
+    let trail = match args.next().as_deref() {
+        Some(slug) => Trail::from_slug(&slug).ok_or_else(|| format!("unknown trail {slug:?}"))?,
+        None => Trail::Markham,
+    };
+    if let Some(extra) = args.next() {
+        return Err(format!("unexpected argument {extra:?}"));
+    }
+
+    let raw = fs::read_to_string(&path)
+        .map_err(|e| format!("could not read fixture {path:?}: {e}"))?;
+    let response: ForecastResponse =
+        serde_json::from_str(&raw).map_err(|e| format!("could not parse fixture: {e}"))?;
+    let days = response.days();
+    if days.len() < 2 {
+        return Err("fixture has too few days to backtest".into());
+    }
+
+    let params = Params::for_trail(trail);
+    let first = days[0].date;
+    let last = days[days.len() - 1].date;
+    let mut maybe_closed = 0u32;
+    let mut likely_open = 0u32;
+
+    println!(
+        "backtest {} | {} | {} days ({} to {})",
+        trail.slug(),
+        trail.short_name(),
+        days.len(),
+        first,
+        last,
+    );
+    println!("date         stars  status               note");
+    println!("{}", "-".repeat(60));
+
+    let mut date = first;
+    loop {
+        let weather = days
+            .iter()
+            .find(|d| d.date == date)
+            .ok_or_else(|| format!("no data for {date}"))?;
+        let scored = score_days(&days, date, &params);
+        let score = scored
+            .iter()
+            .find(|d| d.date == date)
+            .ok_or_else(|| format!("could not score {date}"))?;
+
+        let status = match score.closure_status {
+            jaycast::score::ClosureStatus::Possible => {
+                maybe_closed += 1;
+                "maybe closed"
+            }
+            jaycast::score::ClosureStatus::Clear => {
+                likely_open += 1;
+                "likely open"
+            }
+            jaycast::score::ClosureStatus::NotApplicable => "n/a",
+        };
+
+        let note = score
+            .factors
+            .iter()
+            .find(|f| f.name == "Trail status")
+            .map(|f| f.note.clone())
+            .unwrap_or_default();
+
+        println!(
+            "{date}  {:.1}  {status:<20} {note}  ({:.2}\" rain)",
+            score.stars,
+            weather.precip_in,
+        );
+
+        if date == last {
+            break;
+        }
+        date += Duration::days(1);
+    }
+
+    println!("{}", "-".repeat(60));
+    println!(
+        "summary: {likely_open} likely open, {maybe_closed} maybe closed (out of {} days)",
+        days.len(),
+    );
+
+    Ok(())
+}
+
 fn print_help() {
     eprintln!(
-        "Usage: jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]"
+        "Usage:\n  jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]\n  jaycast backtest <fixture.json> [camp-murphy|markham|quiet-waters]"
     );
 }
 
