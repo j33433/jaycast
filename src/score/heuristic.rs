@@ -110,13 +110,25 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
             .as_ref()
             .map(|status| status.daylight_fraction)
             .unwrap_or(1.0),
-        RideabilityModel::SandPack | RideabilityModel::MixedSurface => {
+        RideabilityModel::SandPack => {
             if day.precip_ride_in >= p.ride_day_precip_hard {
                 0.25
             } else if day.precip_ride_in > p.ride_day_precip_soft {
                 let t = (day.precip_ride_in - p.ride_day_precip_soft)
                     / (p.ride_day_precip_hard - p.ride_day_precip_soft);
                 lerp(0.9, 0.25, t.clamp(0.0, 1.0))
+            } else {
+                1.0
+            }
+        }
+        RideabilityModel::MixedSurface => {
+            // QW never closes and degrades slowly, so the floor is more generous.
+            if day.precip_ride_in >= p.ride_day_precip_hard {
+                0.45
+            } else if day.precip_ride_in > p.ride_day_precip_soft {
+                let t = (day.precip_ride_in - p.ride_day_precip_soft)
+                    / (p.ride_day_precip_hard - p.ride_day_precip_soft);
+                lerp(0.9, 0.45, t.clamp(0.0, 1.0))
             } else {
                 1.0
             }
@@ -200,13 +212,13 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     // Timing: best near ideal_hours_since_rain, fades to 0 at pack_fade_hours.
     let timing_q = match effective_hours {
         None => p.dry_timing_floor.max(0.15),
-        Some(h) if h < 6.0 => 0.35, // still very fresh / maybe wet
+        Some(h) if h < 6.0 => p.fresh_rain_floor, // still very fresh / maybe wet
         Some(h) => {
             let peak = p.ideal_hours_since_rain;
             let fade = p.pack_fade_hours;
             if h <= peak {
                 // ramp from 6h → peak
-                lerp(0.55, 1.0, ((h - 6.0) / (peak - 6.0)).clamp(0.0, 1.0))
+                lerp(p.ramp_start_quality, 1.0, ((h - 6.0) / (peak - 6.0)).clamp(0.0, 1.0))
             } else if h >= fade {
                 p.dry_timing_floor
             } else {
@@ -662,22 +674,27 @@ fn wet_period_blurb(day: &DayWeather) -> String {
     let period = if total <= 0.0 {
         "day"
     } else {
+        let am = morning;
+        let pm = afternoon + evening;
         let (name, amount) = [
-            ("morning", morning),
-            ("afternoon", afternoon),
-            ("evening", evening),
+            ("AM", am),
+            ("PM", pm),
         ]
         .into_iter()
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
         .unwrap_or(("day", 0.0));
-        // Spread across multiple periods stays "wet day".
+        // Spread across both halves stays "rainy day".
         if amount / total >= 0.55 {
             name
         } else {
-            "day"
+            "rainy day"
         }
     };
-    format!("wet {period} · {:.2} in rain", day.precip_in)
+    if period == "rainy day" {
+        "rainy day".into()
+    } else {
+        format!("rain {period}")
+    }
 }
 
 fn trap_score(x: f64, a: f64, b: f64, c: f64, d: f64) -> f64 {
@@ -1027,6 +1044,30 @@ mod tests {
     }
 
     #[test]
+    fn quiet_waters_tolerates_ride_window_rain_better_than_camp() {
+        let prior = day("2026-07-01", 1.0, 80.0);
+        let mut wet_ride = day("2026-07-02", 0.50, 82.0);
+        wet_ride.precip_ride_in = 0.50;
+        wet_ride.precip_pm_in = 0.0;
+        let days = vec![prior, wet_ride];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+
+        let camp_score = score_days(&days, today, &Params::default())[1].score;
+        let quiet_score = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        )[1]
+        .score;
+
+        assert!(
+            quiet_score > camp_score,
+            "Quiet Waters should tolerate ride-window rain better than Camp Murphy: \
+             quiet {quiet_score:.3} vs camp {camp_score:.3}"
+        );
+    }
+
+    #[test]
     fn stars_mapping_boundaries() {
         assert!((score_to_stars(1.0) - 5.0).abs() < 1e-9);
         assert!((score_to_stars(0.0) - 1.0).abs() < 1e-9);
@@ -1038,14 +1079,14 @@ mod tests {
     fn wet_blurb_names_the_dominant_period() {
         let mut evening = day("2026-07-02", 1.0, 88.0);
         evening.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
-        assert_eq!(wet_period_blurb(&evening), "wet evening · 1.00 in rain");
+        assert_eq!(wet_period_blurb(&evening), "rain PM");
 
         let mut morning = day("2026-07-02", 0.50, 88.0);
         morning.precip_3h_in = [0.0, 0.0, 0.40, 0.10, 0.0, 0.0, 0.0, 0.0];
-        assert_eq!(wet_period_blurb(&morning), "wet morning · 0.50 in rain");
+        assert_eq!(wet_period_blurb(&morning), "rain AM");
 
         let mut spread = day("2026-07-02", 0.60, 88.0);
-        spread.precip_3h_in = [0.0, 0.0, 0.20, 0.0, 0.20, 0.0, 0.20, 0.0];
-        assert_eq!(wet_period_blurb(&spread), "wet day · 0.60 in rain");
+        spread.precip_3h_in = [0.0, 0.0, 0.30, 0.0, 0.30, 0.0, 0.0, 0.0];
+        assert_eq!(wet_period_blurb(&spread), "rainy day");
     }
 }

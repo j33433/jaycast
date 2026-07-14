@@ -40,6 +40,10 @@ pub struct Params {
     pub ride_day_precip_soft: f64,
     /// Ride-window rain amount that fully tanks the ride (inches).
     pub ride_day_precip_hard: f64,
+    /// Minimum timing quality when rain just ended (< 6h, still settling).
+    pub fresh_rain_floor: f64,
+    /// Quality at the start of the 6h→peak ramp (rises to 1.0 at peak).
+    pub ramp_start_quality: f64,
     /// Reference daily ET0 (inches) for "normal" drying. Sunny days exceed it
     /// (dry faster), cloudy days fall below (stay damp longer).
     pub et0_dry_ref: f64,
@@ -80,6 +84,8 @@ impl Default for Params {
             drainage_scale_floor: 0.35,
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
+            fresh_rain_floor: 0.35,
+            ramp_start_quality: 0.55,
             et0_dry_ref: 0.20,
             et0_modulation: 0.30,
             temp_ideal_low: 65.0,
@@ -121,6 +127,12 @@ impl Params {
                 params.ideal_hours_since_rain = 30.0;
                 params.pack_fade_hours = 120.0;
                 params.dry_timing_floor = 0.55;
+                // QW never closes and degrades slowly, so be more generous with
+                // ride-window rain thresholds and the fresh-rain timing curve.
+                params.ride_day_precip_soft = 0.12;
+                params.ride_day_precip_hard = 0.70;
+                params.fresh_rain_floor = 0.50;
+                params.ramp_start_quality = 0.65;
                 params.w_pack = 0.35;
                 params.w_weather = 0.55;
             }
