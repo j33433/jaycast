@@ -320,7 +320,10 @@ fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatu
             closure_status: ClosureStatus::Clear,
         };
     };
-    let reopen_hour = rain_event.end_hour + p.drainage_hours;
+    let scale = (rain_event.total_in / p.drainage_ref_rain_in)
+        .clamp(p.drainage_scale_floor, 1.0);
+    let effective_drainage = p.drainage_hours * scale;
+    let reopen_hour = rain_event.end_hour + effective_drainage;
     let rain_started_during_daylight = rain_event.start_hour >= DAYLIGHT_START_HOUR;
 
     if reopen_hour <= DAYLIGHT_START_HOUR {
@@ -896,13 +899,13 @@ mod tests {
 
     #[test]
     fn markham_uses_hourly_rain_for_same_day_closure() {
-        let mut rain = day("2026-07-02", 0.213, 80.0);
+        let mut rain = day("2026-07-02", 0.80, 80.0);
         rain.precip_prob_max = 10.0;
         rain.precip_prob_ride_max = 10.0;
-        rain.precip_hourly_in[0] = 0.039;
-        rain.precip_hourly_in[1] = 0.126;
-        rain.precip_hourly_in[2] = 0.035;
-        rain.precip_hourly_in[3] = 0.012;
+        rain.precip_hourly_in[0] = 0.15;
+        rain.precip_hourly_in[1] = 0.48;
+        rain.precip_hourly_in[2] = 0.12;
+        rain.precip_hourly_in[3] = 0.05;
         let days = vec![rain, day("2026-07-03", 0.0, 80.0)];
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
         let scored = score_days(
@@ -953,10 +956,10 @@ mod tests {
 
     #[test]
     fn markham_combines_rain_across_midnight() {
-        let mut before_midnight = day("2026-07-01", 0.07, 80.0);
-        before_midnight.precip_hourly_in[23] = 0.07;
-        let mut after_midnight = day("2026-07-02", 0.07, 80.0);
-        after_midnight.precip_hourly_in[1] = 0.07;
+        let mut before_midnight = day("2026-07-01", 0.25, 80.0);
+        before_midnight.precip_hourly_in[23] = 0.25;
+        let mut after_midnight = day("2026-07-02", 0.25, 80.0);
+        after_midnight.precip_hourly_in[1] = 0.25;
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
         let scored = score_days(
             &[before_midnight, after_midnight],

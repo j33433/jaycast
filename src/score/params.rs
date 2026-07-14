@@ -31,6 +31,11 @@ pub struct Params {
     pub dry_timing_floor: f64,
     /// Hours after meaningful rain that Markham may remain closed while draining.
     pub drainage_hours: f64,
+    /// Rain total (inches) at which the full drainage_hours window applies.
+    /// Lighter rain scales the window down proportionally.
+    pub drainage_ref_rain_in: f64,
+    /// Minimum fraction of drainage_hours for trace-level rain (0..1).
+    pub drainage_scale_floor: f64,
     /// Ride-window rain amount that starts a real "rained-on ride" penalty (inches).
     pub ride_day_precip_soft: f64,
     /// Ride-window rain amount that fully tanks the ride (inches).
@@ -71,6 +76,8 @@ impl Default for Params {
             pack_fade_hours: 72.0, // ~3 days
             dry_timing_floor: 0.1,
             drainage_hours: 8.5,
+            drainage_ref_rain_in: 0.70,
+            drainage_scale_floor: 0.35,
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
             et0_dry_ref: 0.20,
@@ -100,6 +107,8 @@ impl Params {
                 params.significant_rain_in = 0.10;
                 // July 11 observation: 0.21 in ending around 4 AM reopened at 12:30 PM.
                 params.drainage_hours = 8.5;
+                params.drainage_ref_rain_in = 0.70;
+                params.drainage_scale_floor = 0.35;
                 params.w_pack = 0.55;
                 params.w_weather = 0.35;
             }
