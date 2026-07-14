@@ -37,6 +37,13 @@ pub fn App() -> impl IntoView {
         apply_theme_color(t);
     });
 
+    Effect::new(move |_| {
+        let t = trail.get();
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            doc.set_title(&format!("{}cast · {} trail forecast", t.brand(), t.short_name()));
+        }
+    });
+
     let load = move || {
         let m = model.get_untracked();
         let t = trail.get_untracked();
