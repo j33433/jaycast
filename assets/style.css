@@ -706,26 +706,14 @@ body {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--jay) 30%, transparent);
 }
 
-/* Weekends stand out for ride planning */
-.day-card.weekend {
-  border-width: 2px;
-  border-color: color-mix(in srgb, var(--sand-hot) 70%, var(--score-color));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--sand) 55%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--sand-hot) 25%, transparent);
-}
-
-.day-card.weekend.selected {
-  border-width: 2px;
-  border-color: color-mix(in srgb, var(--sand-hot) 50%, var(--score-color));
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--sand) 50%, var(--score-color)),
-    inset 0 0 0 1px color-mix(in srgb, var(--score-color) 20%, transparent);
-}
-
-.day-card.weekend .dow {
-  color: var(--sand-hot);
-  font-weight: 650;
+/* Sat/Sun label becomes a soft pill badge for ride planning */
+.day-card.weekend .date .dow {
+  display: block;
+  width: fit-content;
+  background: color-mix(in srgb, var(--sand-hot) 60%, var(--bg-card));
+  color: #0e1a22;
+  padding: 0.05em 0.35em;
+  border-radius: 0.3rem;
 }
 
 .day-card.best.selected {
