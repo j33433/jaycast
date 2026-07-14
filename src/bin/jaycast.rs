@@ -116,11 +116,24 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 }
 
 fn fetch_forecast(url: String, source: &str) -> Result<ForecastResponse, String> {
-    ureq::get(&url)
-        .call()
-        .map_err(|error| format!("{source} request failed: {error}"))?
-        .into_json()
-        .map_err(|error| format!("{source} response could not be parsed: {error}"))
+    for attempt in 0..3u32 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        match ureq::get(&url).call() {
+            Ok(response) => {
+                return response.into_json().map_err(|error| {
+                    format!("{source} response could not be parsed: {error}")
+                });
+            }
+            Err(ureq::Error::Status(503, _)) if attempt < 2 => continue,
+            Err(ureq::Error::Status(503, _)) => {
+                return Err(format!("{source} request failed: HTTP 503 after 3 attempts"));
+            }
+            Err(error) => return Err(format!("{source} request failed: {error}")),
+        }
+    }
+    unreachable!()
 }
 
 fn print_range_analysis(

@@ -94,6 +94,38 @@ struct CacheEntry {
     payload: ForecastResponse,
 }
 
+/// Maximum number of attempts (initial + retries) when the API returns 503.
+const MAX_503_ATTEMPTS: u32 = 3;
+
+/// Send a GET request, retrying up to 2 more times with a 1s pause on HTTP 503.
+async fn fetch_with_retry(
+    url: &str,
+    label: &str,
+) -> Result<gloo_net::http::Response, String> {
+    let mut last_err = String::new();
+    for attempt in 0..MAX_503_ATTEMPTS {
+        if attempt > 0 {
+            gloo_timers::future::TimeoutFuture::new(1000).await;
+        }
+        let resp = Request::get(url)
+            .send()
+            .await
+            .map_err(|e| format!("{label} network error: {e}"))?;
+
+        if resp.status() == 503 {
+            last_err = format!("{label} API returned HTTP 503 (attempt {})", attempt + 1);
+            continue;
+        }
+
+        if !resp.ok() {
+            return Err(format!("{label} API returned HTTP {}", resp.status()));
+        }
+
+        return Ok(resp);
+    }
+    Err(last_err)
+}
+
 pub async fn fetch_forecast(model: WeatherModel, trail: Trail) -> Result<ForecastResponse, String> {
     let cache_key = model.cache_key(trail);
     if let Some(cached) = load_cache(&cache_key, None, None) {
@@ -101,14 +133,7 @@ pub async fn fetch_forecast(model: WeatherModel, trail: Trail) -> Result<Forecas
     }
 
     let url = build_url(model, trail);
-    let resp = Request::get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {e}"))?;
-
-    if !resp.ok() {
-        return Err(format!("Weather API returned HTTP {}", resp.status()));
-    }
+    let resp = fetch_with_retry(&url, "Weather").await?;
 
     let payload: ForecastResponse = resp
         .json()
@@ -132,17 +157,8 @@ pub async fn fetch_historical_analysis(
         return Ok(cached);
     }
 
-    let resp = Request::get(&build_historical_url(start, end, trail))
-        .send()
-        .await
-        .map_err(|e| format!("Historical weather network error: {e}"))?;
-
-    if !resp.ok() {
-        return Err(format!(
-            "Historical weather API returned HTTP {}",
-            resp.status()
-        ));
-    }
+    let resp = fetch_with_retry(&build_historical_url(start, end, trail), "Historical weather")
+        .await?;
 
     let payload: ForecastResponse = resp
         .json()
