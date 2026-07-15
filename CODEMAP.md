@@ -10,9 +10,6 @@ jaycast/
   index.html
   robots.txt
   sitemap.xml
-  install.sh              # gitignored deploy script (trunk build + rsync)
-  .gitignore
-  LICENSE                 # GPL-3.0-or-later
   README.md
   CODEMAP.md
   assets/
@@ -53,9 +50,6 @@ jaycast/
 | `index.html` | App entry HTML. Inline JS applies saved theme before render. OpenGraph/Twitter meta, JSON-LD structured data. Trunk asset links for icon, CSS, WASM, and copy-file directives for SVGs, LICENSE, robots.txt, sitemap.xml. |
 | `robots.txt` | Allows `/jaycast/`, declares sitemap URL. |
 | `sitemap.xml` | Single URL entry for the deployed site. |
-| `install.sh` | Deploy script (gitignored). Runs `trunk build --release` then rsyncs `dist/` to nginx. |
-| `.gitignore` | Ignores `/target`, `/dist`, `.DS_Store`, `*.swp`, `install.sh`. |
-| `LICENSE` | GPL-3.0-or-later full text. |
 | `README.md` | Project description, trail profiles, develop/test/build instructions, CLI usage, score model summary. |
 
 ## assets/
