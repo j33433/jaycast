@@ -20,7 +20,7 @@ pub const VIEW_DAYS: usize = 9;
 
 const CACHE_TTL_SECS: i64 = 90 * 60; // 1.5 hours
 const MODEL_PREF_KEY: &str = "jaycast:model-pref";
-const HISTORY_CACHE_KEY: &str = "jaycast:om:v1-history";
+const HISTORY_CACHE_KEY: &str = "jaycast:om:v2-history";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WeatherModel {
@@ -59,7 +59,7 @@ impl WeatherModel {
 
     fn cache_key(self, trail: Trail) -> String {
         format!(
-            "jaycast:om:v10:{}:{}",
+            "jaycast:om:v11:{}:{}",
             trail.slug(),
             self.short().to_lowercase()
         )
@@ -245,7 +245,7 @@ fn append_weather_fields(url: &mut String) {
          temperature_2m_max,temperature_2m_min,apparent_temperature_max,\
          wind_speed_10m_max,wind_gusts_10m_max,et0_fao_evapotranspiration",
     );
-    url.push_str("&hourly=precipitation,precipitation_probability,cloud_cover");
+    url.push_str("&hourly=precipitation,precipitation_probability,cloud_cover,apparent_temperature");
     url.push_str("&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch");
 }
 
@@ -311,6 +311,8 @@ mod tests {
             temp_max_f: 0.0,
             temp_min_f: 0.0,
             apparent_max_f: 0.0,
+            apparent_am_f: 0.0,
+            apparent_pm_f: 0.0,
             wind_max_mph: 0.0,
             gust_max_mph: 0.0,
             et0: 0.0,

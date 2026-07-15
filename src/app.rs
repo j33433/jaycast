@@ -617,6 +617,7 @@ fn Timeline(
                         let is_weekend = is_weekend(date);
                         let stars = stars_str(d.stars);
                         let blurb = d.blurb.clone();
+                        let comfort_note = d.comfort_note.clone();
                         let precip = format!("{:.2}\"", d.precip_in);
                         let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
                         let rain_path = rain_wave_path(&d.precip_3h_in);
@@ -721,7 +722,23 @@ fn Timeline(
                                     </div>
                                     <div class="precip">
                                         {precip}
-                                        <span class="temp">{temp}</span>
+                                        <div class="temp-row">
+                                            {comfort_note.as_ref().map(|n| view! {
+                                                <span class="comfort-badge">
+                                                    <svg class="comfort-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none">
+                                                            <line x1="12" y1="2" x2="12" y2="22"/>
+                                                            <line x1="2" y1="12" x2="22" y2="12"/>
+                                                            <line x1="5" y1="5" x2="19" y2="19"/>
+                                                            <line x1="19" y1="5" x2="5" y2="19"/>
+                                                        </g>
+                                                        <path fill="currentColor" d="M12 4l2 2-2 2-2-2zM12 16l2 2-2 2-2-2zM4 12l2-2 2 2-2 2zM16 12l2-2 2 2-2 2z"/>
+                                                    </svg>
+                                                    {n.clone()}
+                                                </span>
+                                            })}
+                                            <span class="temp">{temp}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 {move || {
@@ -750,9 +767,13 @@ fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
         )
     };
     let tint = score_style(d.score);
+    let comfort_detail = d.comfort_detail.clone();
     view! {
         <section class="detail" style=tint>
-            <p class="score-line">{score_line}</p>
+            <p class="score-line">
+                {score_line}
+                {comfort_detail.map(|text| format!(" · {text}"))}
+            </p>
             <ul class="factors">
                 {d.factors
                     .into_iter()

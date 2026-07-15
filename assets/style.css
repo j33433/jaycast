@@ -759,6 +759,25 @@ body {
   text-underline-offset: 0.16em;
 }
 
+.comfort-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--scrub);
+  background: color-mix(in srgb, var(--scrub) 18%, transparent);
+  border-radius: 0.3rem;
+  white-space: nowrap;
+}
+
+.comfort-icon {
+  width: 0.65rem;
+  height: 0.65rem;
+  flex-shrink: 0;
+}
+
 .day-card .precip {
   text-align: right;
   font-size: 0.8rem;
@@ -767,10 +786,16 @@ body {
   min-width: 3.5rem;
 }
 
-.day-card .precip .temp {
-  display: block;
-  color: var(--text-muted);
+.day-card .temp-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
   margin-top: 0.15rem;
+}
+
+.day-card .precip .temp {
+  color: var(--text-muted);
 }
 
 /* Detail panel: unfurls under selected day card */

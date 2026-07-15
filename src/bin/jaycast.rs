@@ -194,6 +194,12 @@ fn print_analysis(
         "  cloud by 3h: {}",
         format_three_hour(&weather.cloud_3h_pct, 0)
     );
+    println!(
+        "  feels like: AM {:.0}°F / PM {:.0}°F{}",
+        score.apparent_am_f,
+        score.apparent_pm_f,
+        score.comfort_detail.as_deref().map(|n| format!("  ({n})")).unwrap_or_default(),
+    );
     for factor in &score.factors {
         println!("  {}: {}", factor.name, factor.note);
     }

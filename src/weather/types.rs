@@ -39,6 +39,10 @@ pub struct HourlyBlock {
     #[serde(default)]
     pub precipitation_probability: Vec<Option<f64>>,
     pub cloud_cover: Vec<Option<f64>>,
+    /// Apparent (feels-like) temperature in Fahrenheit. May be absent in cached
+    /// responses from before this field was added.
+    #[serde(default)]
+    pub apparent_temperature: Vec<Option<f64>>,
 }
 
 /// One calendar day of inputs used by the scorer.
@@ -53,6 +57,10 @@ pub struct DayWeather {
     pub temp_max_f: f64,
     pub temp_min_f: f64,
     pub apparent_max_f: f64,
+    /// Average apparent (feels-like) temp during the 8 AM-noon ride window (°F).
+    pub apparent_am_f: f64,
+    /// Average apparent (feels-like) temp during noon-8 PM (°F).
+    pub apparent_pm_f: f64,
     pub wind_max_mph: f64,
     pub gust_max_mph: f64,
     /// Reference evapotranspiration for the day (inches). Drying-rate proxy:
@@ -82,6 +90,7 @@ impl ForecastResponse {
             };
 
             let (precip_ride_in, precip_pm_in) = self.precip_windows_for_date(&self.daily.time[i]);
+            let (apparent_am_f, apparent_pm_f) = self.apparent_windows_for_date(&self.daily.time[i]);
             let precip_prob_max = opt(self.daily.precipitation_probability_max.get(i));
             let precip_prob_ride_max =
                 self.prob_ride_max_for_date(&self.daily.time[i], precip_prob_max);
@@ -97,6 +106,8 @@ impl ForecastResponse {
                 temp_max_f: opt(self.daily.temperature_2m_max.get(i)),
                 temp_min_f: opt(self.daily.temperature_2m_min.get(i)),
                 apparent_max_f: opt(self.daily.apparent_temperature_max.get(i)),
+                apparent_am_f,
+                apparent_pm_f,
                 wind_max_mph: opt(self.daily.wind_speed_10m_max.get(i)),
                 gust_max_mph: opt(self.daily.wind_gusts_10m_max.get(i)),
                 et0: opt(self.daily.et0_fao_evapotranspiration.get(i)),
@@ -159,6 +170,40 @@ impl ForecastResponse {
         }
 
         (ride, pm)
+    }
+
+    /// Average apparent temperature for the AM (8-noon) and PM (noon-8 PM) windows.
+    fn apparent_windows_for_date(&self, date_str: &str) -> (f64, f64) {
+        let Some(hourly) = self.hourly.as_ref() else {
+            return (0.0, 0.0);
+        };
+        let mut am_sum = 0.0;
+        let mut am_count = 0u32;
+        let mut pm_sum = 0.0;
+        let mut pm_count = 0u32;
+
+        for (i, t) in hourly.time.iter().enumerate() {
+            if !t.starts_with(date_str) {
+                continue;
+            }
+            let Some(h) = hour_of(t) else {
+                continue;
+            };
+            let Some(val) = hourly.apparent_temperature.get(i).and_then(|v| *v) else {
+                continue;
+            };
+            if (RIDE_START_HOUR..RIDE_END_HOUR).contains(&h) {
+                am_sum += val;
+                am_count += 1;
+            } else if (RIDE_END_HOUR..PARK_CLOSE_HOUR).contains(&h) {
+                pm_sum += val;
+                pm_count += 1;
+            }
+        }
+
+        let am = if am_count > 0 { am_sum / am_count as f64 } else { 0.0 };
+        let pm = if pm_count > 0 { pm_sum / pm_count as f64 } else { 0.0 };
+        (am, pm)
     }
 
     /// Max hourly precip probability in the 8 AM-noon ride window.
@@ -288,6 +333,7 @@ mod tests {
                     Some(90.0),
                 ],
                 cloud_cover: vec![Some(0.0); 6],
+                apparent_temperature: vec![],
             }),
         };
 
@@ -298,5 +344,56 @@ mod tests {
         assert!((day.precip_hourly_in[8] - 0.01).abs() < 1e-9);
         // Ride-window chance is max of 8 AM and 11 AM, not noon/evening peaks.
         assert!((day.precip_prob_ride_max - 55.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn apparent_windows_averaged_correctly() {
+        let response = ForecastResponse {
+            latitude: 0.0,
+            longitude: 0.0,
+            timezone: None,
+            daily: DailyBlock {
+                time: vec!["2026-07-11".into()],
+                precipitation_sum: vec![Some(0.0)],
+                precipitation_probability_max: vec![],
+                temperature_2m_max: vec![],
+                temperature_2m_min: vec![],
+                apparent_temperature_max: vec![],
+                wind_speed_10m_max: vec![],
+                wind_gusts_10m_max: vec![],
+                et0_fao_evapotranspiration: vec![],
+            },
+            hourly: Some(HourlyBlock {
+                time: vec![
+                    "2026-07-11T08:00".into(),
+                    "2026-07-11T09:00".into(),
+                    "2026-07-11T10:00".into(),
+                    "2026-07-11T11:00".into(),
+                    "2026-07-11T12:00".into(),
+                    "2026-07-11T15:00".into(),
+                    "2026-07-11T19:00".into(),
+                    "2026-07-11T20:00".into(),
+                ],
+                precipitation: vec![Some(0.0); 8],
+                precipitation_probability: vec![],
+                cloud_cover: vec![],
+                apparent_temperature: vec![
+                    Some(80.0),
+                    Some(82.0),
+                    Some(84.0),
+                    Some(86.0),
+                    Some(90.0),
+                    Some(100.0),
+                    Some(98.0),
+                    Some(95.0),
+                ],
+            }),
+        };
+
+        let day = response.days().pop().unwrap();
+        // AM: avg of 80, 82, 84, 86 = 83.0
+        assert!((day.apparent_am_f - 83.0).abs() < 1e-9);
+        // PM: avg of 90, 100, 98 = 96.0 (8 PM is after park close, excluded)
+        assert!((day.apparent_pm_f - 96.0).abs() < 1e-9);
     }
 }
