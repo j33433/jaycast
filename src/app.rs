@@ -744,7 +744,7 @@ fn Timeline(
                                 {move || {
                                     (selected.get() == Some(date))
                                         .then(|| {
-                                            day_detail_view(detail.clone(), trail.get_untracked())
+                                            day_detail_view(detail.clone())
                                         })
                                 }}
                             </div>
@@ -756,23 +756,17 @@ fn Timeline(
     }
 }
 
-fn day_detail_view(d: DayForecast, trail: Trail) -> impl IntoView {
-    let score_line = if trail == Trail::Markham {
-        format!("score {:.0}%", d.score * 100.0)
-    } else {
-        format!(
-            "score {:.0}% · {:.0}% rain chance 8 AM-noon",
-            d.score * 100.0,
-            d.precip_prob_ride_max
-        )
+fn day_detail_view(d: DayForecast) -> impl IntoView {
+    let rain = format!("{:.0}% rain chance 8 AM-noon", d.precip_prob_ride_max);
+    let score_line = match d.comfort_detail.as_deref() {
+        Some(t) => format!("{rain} · {t}"),
+        None => rain,
     };
     let tint = score_style(d.score);
-    let comfort_detail = d.comfort_detail.clone();
     view! {
         <section class="detail" style=tint>
             <p class="score-line">
                 {score_line}
-                {comfort_detail.map(|text| format!(" · {text}"))}
             </p>
             <ul class="factors">
                 {d.factors

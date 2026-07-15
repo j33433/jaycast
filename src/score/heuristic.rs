@@ -113,7 +113,7 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
             if day.apparent_am_f > 0.0 && day.apparent_am_f <= avg_am - COMFORT_THRESHOLD {
                 let delta = (avg_am - day.apparent_am_f).round();
                 forecasts[i].comfort_note = Some("AM".into());
-                forecasts[i].comfort_detail = Some(format!("{delta:.0}° cooler AM"));
+                forecasts[i].comfort_detail = Some(format!("{delta:.0}° below avg AM"));
                 continue;
             }
         }
@@ -122,7 +122,7 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
             if day.apparent_pm_f > 0.0 && day.apparent_pm_f <= avg_pm - COMFORT_THRESHOLD {
                 let delta = (avg_pm - day.apparent_pm_f).round();
                 forecasts[i].comfort_note = Some("PM".into());
-                forecasts[i].comfort_detail = Some(format!("{delta:.0}° cooler PM"));
+                forecasts[i].comfort_detail = Some(format!("{delta:.0}° below avg PM"));
             }
         }
     }
@@ -1422,8 +1422,8 @@ mod tests {
             Some("AM"),
             "expected comfort note for cool AM"
         );
-        // Trailing avg 90.0, day 85.0 → 5° cooler.
-        assert_eq!(d.comfort_detail.as_deref(), Some("5° cooler AM"));
+        // Trailing avg 90.0, day 85.0 → 5° below avg.
+        assert_eq!(d.comfort_detail.as_deref(), Some("5° below avg AM"));
     }
 
     #[test]
