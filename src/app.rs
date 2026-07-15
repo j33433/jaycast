@@ -391,19 +391,6 @@ fn Hero(
                             <button
                                 type="button"
                                 class=move || {
-                                    if model.get() == WeatherModel::GfsSeamless {
-                                        "model-btn active"
-                                    } else {
-                                        "model-btn"
-                                    }
-                                }
-                                on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
-                            >
-                                "GFS"
-                            </button>
-                            <button
-                                type="button"
-                                class=move || {
                                     if model.get() == WeatherModel::Ecmwf {
                                         "model-btn active"
                                     } else {
@@ -413,6 +400,19 @@ fn Hero(
                                 on:click=move |_| on_switch.run(WeatherModel::Ecmwf)
                             >
                                 "ECMWF"
+                            </button>
+                            <button
+                                type="button"
+                                class=move || {
+                                    if model.get() == WeatherModel::GfsSeamless {
+                                        "model-btn active"
+                                    } else {
+                                        "model-btn"
+                                    }
+                                }
+                                on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
+                            >
+                                "GFS"
                             </button>
                         </div>
                         <button

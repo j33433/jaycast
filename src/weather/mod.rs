@@ -66,16 +66,16 @@ impl WeatherModel {
     }
 }
 
-/// Read saved model preference from localStorage (default GFS).
+/// Read saved model preference from localStorage (default ECMWF).
 pub fn load_model_pref() -> WeatherModel {
     if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
         if let Ok(Some(val)) = storage.get_item(MODEL_PREF_KEY) {
-            if val == "ecmwf" {
-                return WeatherModel::Ecmwf;
+            if val == "gfs" {
+                return WeatherModel::GfsSeamless;
             }
         }
     }
-    WeatherModel::GfsSeamless
+    WeatherModel::Ecmwf
 }
 
 /// Persist model preference to localStorage.
