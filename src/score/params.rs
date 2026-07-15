@@ -126,12 +126,12 @@ impl Params {
                 params.pack_lookback_hours = 72.0;
                 params.ideal_hours_since_rain = 30.0;
                 params.pack_fade_hours = 120.0;
-                params.dry_timing_floor = 0.55;
+                params.dry_timing_floor = 0.90;
                 // QW never closes and degrades slowly, so be more generous with
                 // ride-window rain thresholds and the fresh-rain timing curve.
                 params.ride_day_precip_soft = 0.12;
                 params.ride_day_precip_hard = 0.70;
-                params.fresh_rain_floor = 0.50;
+                params.fresh_rain_floor = 0.35;
                 params.ramp_start_quality = 0.65;
                 params.w_pack = 0.35;
                 params.w_weather = 0.55;

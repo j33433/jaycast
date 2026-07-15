@@ -135,7 +135,25 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
         }
     };
 
-    let score = ((p.w_pack * pack_q + p.w_weather * wx_q + p.w_confidence * conf_q) * wet_gate)
+    // Mud gate for MixedSurface: temporary overall ding when trail is muddy.
+    let mud_gate = if p.model == RideabilityModel::MixedSurface {
+        let trail_note = pack_factors
+            .iter()
+            .find(|f| f.name == "Trail conditions")
+            .map(|f| f.note.as_str())
+            .unwrap_or("");
+        if trail_note.starts_with("mud") {
+            0.65
+        } else {
+            1.0
+        }
+    } else {
+        1.0
+    };
+
+    let score = ((p.w_pack * pack_q + p.w_weather * wx_q + p.w_confidence * conf_q)
+        * wet_gate
+        * mud_gate)
         .clamp(0.0, 1.0);
 
     let mut factors = Vec::new();
@@ -200,33 +218,58 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     let dry_factor = drying_factor(days, idx, hours_since, p);
     let effective_hours = hours_since.map(|h| h * dry_factor);
 
-    // Antecedent rain amount score: triangle around ideal.
-    let amount_q = trap_score(
-        antecedent,
-        p.min_useful_rain_in * 0.5,
-        p.min_useful_rain_in,
-        p.ideal_antecedent_in,
-        p.max_useful_rain_in,
-    );
+    // Antecedent rain amount score.
+    // SandPack: triangle around ideal — rain packs loose sand; dry = soft.
+    // MixedSurface: hardpack stays firm when dry; rain only temporarily degrades.
+    let amount_q = if p.model == RideabilityModel::MixedSurface {
+        (0.90 - (antecedent / p.max_useful_rain_in) * 0.60).clamp(0.30, 0.90)
+    } else {
+        trap_score(
+            antecedent,
+            p.min_useful_rain_in * 0.5,
+            p.min_useful_rain_in,
+            p.ideal_antecedent_in,
+            p.max_useful_rain_in,
+        )
+    };
 
-    // Timing: best near ideal_hours_since_rain, fades to 0 at pack_fade_hours.
-    let timing_q = match effective_hours {
-        None => p.dry_timing_floor.max(0.15),
-        Some(h) if h < 6.0 => p.fresh_rain_floor, // still very fresh / maybe wet
-        Some(h) => {
-            let peak = p.ideal_hours_since_rain;
-            let fade = p.pack_fade_hours;
-            if h <= peak {
-                // ramp from 6h → peak
-                lerp(p.ramp_start_quality, 1.0, ((h - 6.0) / (peak - 6.0)).clamp(0.0, 1.0))
-            } else if h >= fade {
-                p.dry_timing_floor
-            } else {
-                lerp(
-                    1.0,
-                    p.dry_timing_floor,
-                    ((h - peak) / (fade - peak)).clamp(0.0, 1.0),
-                )
+    // Timing quality.
+    // SandPack: best near ideal_hours_since_rain, fades to dry_timing_floor.
+    // MixedSurface: mud ding for rain today or <24h, ramps to dry baseline by 48h.
+    let is_mixed = p.model == RideabilityModel::MixedSurface;
+    let today_significant = day.precip_in >= p.significant_rain_in;
+    let timing_q = if is_mixed {
+        // MixedSurface uses raw hours_since (not ET0-adjusted) — mud is a
+        // physical drainage time, not a sun-drying clock.
+        let mud = today_significant || hours_since.map_or(false, |h| h <= 24.0);
+        match hours_since {
+            None if !today_significant => p.dry_timing_floor,
+            _ if mud => p.fresh_rain_floor,
+            Some(h) if h < 48.0 => lerp(
+                p.fresh_rain_floor,
+                p.dry_timing_floor,
+                ((h - 24.0) / 24.0).clamp(0.0, 1.0),
+            ),
+            _ => p.dry_timing_floor,
+        }
+    } else {
+        match effective_hours {
+            None => p.dry_timing_floor.max(0.15),
+            Some(h) if h < 6.0 => p.fresh_rain_floor,
+            Some(h) => {
+                let peak = p.ideal_hours_since_rain;
+                let fade = p.pack_fade_hours;
+                if h <= peak {
+                    lerp(p.ramp_start_quality, 1.0, ((h - 6.0) / (peak - 6.0)).clamp(0.0, 1.0))
+                } else if h >= fade {
+                    p.dry_timing_floor
+                } else {
+                    lerp(
+                        1.0,
+                        p.dry_timing_floor,
+                        ((h - peak) / (fade - peak)).clamp(0.0, 1.0),
+                    )
+                }
             }
         }
     };
@@ -250,17 +293,33 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     // Combine pack sub-signals (soil moisture dropped — was modeled, not sensed).
     let pack = (0.45 * amount_q + 0.40 * timing_q + 0.15 * wet_q).clamp(0.0, 1.0);
 
-    let timing_note = match effective_hours {
-        None => "no recent rain - sand may be soft".into(),
-        Some(h) if h < 12.0 => format!("rain ended ~{h:.0}h ago - still settling"),
-        Some(h) if h <= 48.0 => format!("rain ended ~{h:.0}h ago - best trail conditions"),
-        Some(h) => format!("rain ended ~{h:.0}h ago - drying out"),
+    let timing_note = if is_mixed {
+        let mud = today_significant || hours_since.map_or(false, |h| h <= 24.0);
+        if mud {
+            let label = mud_period_blurb(days, idx, p);
+            format!("{label} - let it drain")
+        } else if hours_since.map_or(false, |h| h < 48.0) {
+            "drying, firming up".into()
+        } else {
+            "dry hardpack - fast and firm".into()
+        }
+    } else {
+        match effective_hours {
+            None => "no recent rain - sand may be soft".into(),
+            Some(h) if h < 12.0 => format!("rain ended ~{h:.0}h ago - still settling"),
+            Some(h) if h <= 48.0 => format!("rain ended ~{h:.0}h ago - best trail conditions"),
+            Some(h) => format!("rain ended ~{h:.0}h ago - drying out"),
+        }
     };
 
     let amount_note = if antecedent >= p.significant_rain_in && antecedent < p.min_useful_rain_in {
         "some recent rain".into()
     } else if antecedent > p.max_useful_rain_in {
-        format!("{antecedent:.2} in recent rain (heavy - may stay soft or puddled)")
+        if p.model == RideabilityModel::MixedSurface {
+            format!("{antecedent:.2} in recent rain (heavy - may be wet briefly)")
+        } else {
+            format!("{antecedent:.2} in recent rain (heavy - may stay soft or puddled)")
+        }
     } else {
         format!(
             "{antecedent:.2} in rain in prior ~{:.0}h",
@@ -640,6 +699,13 @@ pub fn score_color(score: f64) -> String {
 }
 
 fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> String {
+    if p.model == RideabilityModel::MixedSurface {
+        if let Some(f) = factors.iter().find(|f| f.name == "Trail conditions") {
+            if f.note.starts_with("mud") {
+                return f.note.split(" - ").next().unwrap_or("mud").into();
+            }
+        }
+    }
     if day.precip_in >= 0.25 {
         return wet_period_blurb(day);
     }
@@ -694,6 +760,54 @@ fn wet_period_blurb(day: &DayWeather) -> String {
         "rainy day".into()
     } else {
         format!("rain {period}")
+    }
+}
+
+/// Mud period label for MixedSurface trails: "mud AM", "mud PM", or "mud".
+///
+/// When the ride day itself has significant rain, uses today's 3h buckets.
+/// When rain fell the day before (overnight carryover), checks yesterday's
+/// buckets — PM/evening rain carries into the AM as overnight wetness.
+fn mud_period_blurb(days: &[DayWeather], idx: usize, p: &Params) -> String {
+    let today = &days[idx];
+    if today.precip_in >= p.significant_rain_in {
+        return mud_label_from_3h(&today.precip_3h_in);
+    }
+    if idx > 0 {
+        let prev = &days[idx - 1];
+        if prev.precip_in >= p.significant_rain_in {
+            // Yesterday's PM/evening rain → overnight wetness → mud AM.
+            let prev_am = prev.precip_3h_in[0] + prev.precip_3h_in[1]
+                + prev.precip_3h_in[2]
+                + prev.precip_3h_in[3];
+            let prev_pm =
+                prev.precip_3h_in[4] + prev.precip_3h_in[5] + prev.precip_3h_in[6] + prev.precip_3h_in[7];
+            if prev_pm > prev_am && prev_pm > 0.0 {
+                return "mud AM".into();
+            }
+            return mud_label_from_3h(&prev.precip_3h_in);
+        }
+    }
+    "mud".into()
+}
+
+fn mud_label_from_3h(buckets: &[f64; 8]) -> String {
+    let morning = buckets[0] + buckets[1] + buckets[2] + buckets[3];
+    let afternoon = buckets[4] + buckets[5];
+    let evening = buckets[6] + buckets[7];
+    let total = morning + afternoon + evening;
+    if total <= 0.0 {
+        return "mud".into();
+    }
+    let pm = afternoon + evening;
+    let (name, amount) = [("AM", morning), ("PM", pm)]
+        .into_iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap_or(("day", 0.0));
+    if amount / total >= 0.55 {
+        format!("mud {name}")
+    } else {
+        "mud".into()
     }
 }
 
@@ -1041,6 +1155,41 @@ mod tests {
             quiet > camp,
             "Quiet Waters should degrade less in dry weather"
         );
+        let quiet_stars = score_to_stars(quiet);
+        assert!(
+            quiet_stars >= 4.0,
+            "dry hardpack should score well, got {:.1} stars",
+            quiet_stars
+        );
+    }
+
+    #[test]
+    fn quiet_waters_dry_day_is_fast_and_firm() {
+        // Field observation Jul 15, 2026: "fast with some dust" on a dry day.
+        // The model should score a dry hardpack day high, not penalize it as soft sand.
+        let days = vec![
+            day("2026-07-13", 0.0, 92.0),
+            day("2026-07-14", 0.0, 94.0),
+            day("2026-07-15", 0.0, 94.0),
+        ];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 15).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = scored.iter().find(|d| d.date == today).unwrap();
+        assert!(
+            d.stars >= 3.5,
+            "dry hardpack should score well, got {:.1} stars (score {:.2})",
+            d.stars,
+            d.score
+        );
+        assert!(
+            !d.blurb.contains("soft"),
+            "dry hardpack blurb should not say soft: got '{}'",
+            d.blurb
+        );
     }
 
     #[test]
@@ -1064,6 +1213,120 @@ mod tests {
             quiet_score > camp_score,
             "Quiet Waters should tolerate ride-window rain better than Camp Murphy: \
              quiet {quiet_score:.3} vs camp {camp_score:.3}"
+        );
+    }
+
+    #[test]
+    fn quiet_waters_mud_am() {
+        let mut rain = day("2026-07-02", 0.50, 88.0);
+        rain.precip_3h_in = [0.0, 0.20, 0.20, 0.10, 0.0, 0.0, 0.0, 0.0];
+        rain.precip_ride_in = 0.30;
+        rain.precip_pm_in = 0.0;
+        let days = vec![day("2026-07-01", 0.0, 88.0), rain];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = &scored[1];
+        assert_eq!(d.blurb, "mud AM");
+        assert!(
+            d.stars < 3.5,
+            "mud AM should ding the score, got {:.1} stars",
+            d.stars
+        );
+    }
+
+    #[test]
+    fn quiet_waters_mud_pm() {
+        let mut rain = day("2026-07-02", 0.50, 88.0);
+        rain.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.20, 0.20, 0.10, 0.0];
+        rain.precip_ride_in = 0.0;
+        rain.precip_pm_in = 0.40;
+        let days = vec![day("2026-07-01", 0.0, 88.0), rain];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = &scored[1];
+        assert_eq!(d.blurb, "mud PM");
+        assert!(
+            d.stars < 3.5,
+            "mud PM should ding the score, got {:.1} stars",
+            d.stars
+        );
+    }
+
+    #[test]
+    fn quiet_waters_mud_spread() {
+        let mut rain = day("2026-07-02", 0.60, 88.0);
+        rain.precip_3h_in = [0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0];
+        rain.precip_ride_in = 0.15;
+        rain.precip_pm_in = 0.15;
+        let days = vec![day("2026-07-01", 0.0, 88.0), rain];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = &scored[1];
+        assert_eq!(d.blurb, "mud");
+        assert!(
+            d.stars < 3.5,
+            "mud (spread) should ding the score, got {:.1} stars",
+            d.stars
+        );
+    }
+
+    #[test]
+    fn quiet_waters_mud_am_from_overnight() {
+        // Rain yesterday PM, dry today — overnight wetness carries into AM.
+        let mut prev = day("2026-07-01", 0.50, 88.0);
+        prev.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.20, 0.20, 0.10, 0.0];
+        prev.precip_pm_in = 0.40;
+        let dry_today = day("2026-07-02", 0.0, 88.0);
+        let days = vec![prev, dry_today];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = &scored[1];
+        assert_eq!(d.blurb, "mud AM");
+        assert!(
+            d.stars < 3.5,
+            "overnight mud AM should ding the score, got {:.1} stars",
+            d.stars
+        );
+    }
+
+    #[test]
+    fn quiet_waters_recovered_after_rain() {
+        // Rain 2+ days ago — trail should be dry and firm again.
+        let mut rain = day("2026-07-01", 1.0, 82.0);
+        rain.precip_pm_in = 1.0;
+        let days = vec![
+            rain,
+            day("2026-07-02", 0.0, 88.0),
+            day("2026-07-03", 0.0, 88.0),
+        ];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 3).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = &scored[2];
+        assert_eq!(d.blurb, "good");
+        assert!(
+            d.stars >= 3.5,
+            "recovered trail should score well, got {:.1} stars",
+            d.stars
         );
     }
 
