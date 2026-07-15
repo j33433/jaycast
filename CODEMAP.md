@@ -313,3 +313,4 @@ Native CLI binary (324 lines, requires `cli` feature). Uses `ureq` for HTTP.
 |------|-------------|
 | `markham-2mo.json` | Open-Meteo archive API response for Markham Park (ecmwf_ifs, 2026-05-01 to 2026-07-12, 73 days, 1752 hourly points, 57KB). Contains daily and hourly precipitation, probability, cloud cover, temperature, wind, and ET0 fields. Used by `cargo run --features cli --bin jaycast -- backtest tests/fixtures/markham-2mo.json markham`. |
 | `closures.txt` | Notes of closures gathered from Facebook and likely missing close/open events |
+| `qw.txt` | Notes on condition of Quiet Waters |
