@@ -115,7 +115,7 @@ pub fn update_trail_url(trail: Trail) {
         return;
     };
     let pathname = window.location().pathname().unwrap_or_default();
-    let url = format!("{pathname}?trail={}", trail.slug());
+    let url = format!("{pathname}?{}", trail.slug());
     let _ = history.replace_state_with_url(&JsValue::NULL, "", Some(&url));
 }
 
@@ -128,9 +128,8 @@ fn trail_from_query(query: &str) -> Option<Trail> {
     query
         .trim_start_matches('?')
         .split('&')
-        .filter_map(|part| part.split_once('='))
-        .find_map(|(key, value)| (key == "trail").then_some(value))
-        .and_then(Trail::from_slug)
+        .map(|part| part.split('=').next().unwrap_or(part))
+        .find_map(Trail::from_slug)
 }
 
 #[cfg(test)]
@@ -139,11 +138,12 @@ mod tests {
 
     #[test]
     fn parses_bookmarkable_trail_query() {
-        assert_eq!(trail_from_query("?trail=markham"), Some(Trail::Markham));
+        assert_eq!(trail_from_query("?markham"), Some(Trail::Markham));
         assert_eq!(
-            trail_from_query("model=ecmwf&trail=quiet-waters"),
+            trail_from_query("model=ecmwf&quiet-waters"),
             Some(Trail::QuietWaters)
         );
-        assert_eq!(trail_from_query("?trail=unknown"), None);
+        assert_eq!(trail_from_query("?trail=markham"), None);
+        assert_eq!(trail_from_query("?unknown"), None);
     }
 }

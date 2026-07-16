@@ -152,7 +152,7 @@ Trail definitions and localStorage/URL persistence (149 lines).
 **Functions:**
 - `pub fn load_trail_pref() -> Trail` - reads from URL query then localStorage, defaults to Camp Murphy
 - `pub fn save_trail_pref(trail: Trail)`
-- `pub fn update_trail_url(trail: Trail)` - replaceState with `?trail=<slug>`
+- `pub fn update_trail_url(trail: Trail)` - replaceState with `?<slug>`
 - `fn trail_from_url() -> Option<Trail>` (private)
 - `fn trail_from_query(query: &str) -> Option<Trail>` (private)
 

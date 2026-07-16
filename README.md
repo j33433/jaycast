@@ -10,7 +10,7 @@ Browser-only (Rust → WASM via Leptos). Weather from [Open-Meteo](https://open-
 
 ## Idea
 
-Choose Camp Murphy, Markham Park, or Quiet Waters Park from the location chooser. The choice persists in the browser and can be shared with `?trail=camp-murphy`, `?trail=markham`, or `?trail=quiet-waters`.
+Choose Camp Murphy, Markham Park, or Quiet Waters Park from the location chooser. The choice persists in the browser and can be shared with `?camp-murphy`, `?markham`, or `?quiet-waters`.
 
 Each profile interprets weather according to its terrain:
 
