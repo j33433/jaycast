@@ -18,7 +18,7 @@ Each profile interprets weather according to its terrain:
 2. Markham: meaningful rain uses its hourly end time to estimate a drainage reopening. This is an advisory model, not an official status feed.
 3. Quiet Waters: mixed hardpack and loose-over-hard terrain never closes, is less sand-dependent, degrades more slowly after rain, and gets more generous ride-window rain thresholds and a gentler timing curve.
 
-Each day in a **30-day archive + 7-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. The default timeline shows yesterday, today, and the next 7 days. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top in three-hour periods, from midnight on the left through late evening on the right. Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
+Each day in a **30-day archive + 7-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. The default timeline shows yesterday, today, and the next 7 days. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top in three-hour periods, from midnight on the left through late evening on the right. Day-card side borders encode feels-like vs the prior week: left = morning, right = afternoon (blue cooler, red warmer). Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
 
 ## Develop
 

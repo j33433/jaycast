@@ -623,7 +623,7 @@ fn Timeline(
                         let rain_path = rain_wave_path(&d.precip_3h_in);
                         let cloud_path = cloud_wave_path(&d.cloud_3h_pct);
                         let date_s = format_short(date);
-                        let tint = score_style(d.score);
+                        let tint = day_card_style(d.score, d.am_vs_avg_f, d.pm_vs_avg_f);
                         let detail = d.clone();
                         let possible_closure = d.closure_status.is_possible();
                         let today = Local::now().date_naive();
@@ -762,7 +762,7 @@ fn day_detail_view(d: DayForecast) -> impl IntoView {
         Some(t) => format!("{rain} · {t}"),
         None => rain,
     };
-    let tint = score_style(d.score);
+    let tint = day_card_style(d.score, d.am_vs_avg_f, d.pm_vs_avg_f);
     view! {
         <section class="detail" style=tint>
             <p class="score-line">
@@ -813,6 +813,28 @@ fn stars_str(n: f64) -> String {
 
 fn score_style(score: f64) -> String {
     format!("--score-color: {}", score_color(score))
+}
+
+/// Score tint plus optional AM/PM temp colors for the side borders.
+fn day_card_style(score: f64, am_vs_avg_f: Option<f64>, pm_vs_avg_f: Option<f64>) -> String {
+    let mut style = score_style(score);
+    if let Some(delta) = am_vs_avg_f {
+        style.push_str(&format!("; --am-temp-color: {}", temp_delta_color(delta)));
+    }
+    if let Some(delta) = pm_vs_avg_f {
+        style.push_str(&format!("; --pm-temp-color: {}", temp_delta_color(delta)));
+    }
+    style
+}
+
+fn temp_delta_color(delta: f64) -> String {
+    let t = (delta / 5.0).clamp(-1.0, 1.0);
+    // blue (#4a9fd4) at t=-1 → red (#c46b5a) at t=+1
+    let u = (t + 1.0) / 2.0;
+    let r = (0x4a as f64 + u * (0xc4 - 0x4a) as f64).round() as u8;
+    let g = (0x9f as f64 + u * (0x6b - 0x9f) as f64).round() as u8;
+    let b = (0xd4 as f64 + u * (0x5a - 0xd4) as f64).round() as u8;
+    format!("#{r:02x}{g:02x}{b:02x}")
 }
 
 fn rain_wave_path(rain_3h_in: &[f64]) -> String {

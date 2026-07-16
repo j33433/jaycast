@@ -56,7 +56,7 @@ jaycast/
 
 | File | Description |
 |------|-------------|
-| `style.css` | Application stylesheet (1044 lines). Florida scrub palette with dark (default) and light themes. CSS custom properties for jay blue, scrub green, sand, accent, warn, bad, star, rain. Styles for header, trail logo, location chooser dialog, hero, model toggle, theme toggle, timeline nav, day cards (score-tinted gradients, weekend/best/selected/past/today states), rain-wave and cloud-wave SVG backgrounds, detail panel with factor bars, footer, skeleton shimmer loader. Responsive breakpoint at 30rem. |
+| `style.css` | Application stylesheet. Florida scrub palette with dark (default) and light themes. CSS custom properties for jay blue, scrub green, sand, accent, warn, bad, star, rain. Styles for header, trail logo, location chooser dialog, hero, model toggle, theme toggle, timeline nav, day cards (score-tinted gradients, AM/PM temp side borders, weekend/best/selected/past/today states), rain-wave and cloud-wave SVG backgrounds, detail panel with factor bars, footer, skeleton shimmer loader. Responsive breakpoint at 30rem. |
 | `jaycast-icon.png` | App icon / favicon / OG image. Referenced by `index.html` and `README.md`. |
 
 ## art/
@@ -93,12 +93,13 @@ Leptos UI component tree (874 lines). All components and helpers are private.
 - `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, on_switch)` - composes Hero, TimelineNav, Timeline, footer
 - `Hero(days, refreshed_at, model, trail, grid_lat, grid_lon, theme, on_switch)` - best ride window, GFS/ECMWF toggle, theme toggle (inline sun/moon SVG), distance display
 - `TimelineNav(days, view_start, selected)` - Older/Today/Newer scroll nav
-- `Timeline(days, view_start, selected, trail)` - day cards with rain/cloud wave SVG backgrounds, Markham Facebook status link
+- `Timeline(days, view_start, selected, trail)` - day cards with rain/cloud wave SVG backgrounds, AM/PM temp border colors, Markham Facebook status link
 
 **Helper functions:**
 - `day_detail_view(d, trail)` - detail panel with factor breakdown bars
 - `stars_str(n) -> String`
 - `score_style(score) -> String`
+- `day_card_style(score, am_vs_avg_f, pm_vs_avg_f) -> String` - score tint + AM/PM border colors
 - `rain_wave_path(rain_3h_in) -> String`
 - `cloud_wave_path(cloud_3h_pct) -> String`
 - `smooth_wave_path(values, height) -> String` - Catmull-Rom spline path
@@ -193,7 +194,7 @@ Heuristic rideability score for sandy trails that pack after rain (1048 lines).
 - `struct Factor { name: &'static str, note: String, contribution: f64, quality: f64 }`
 - `enum ClosureStatus { NotApplicable, Clear, Possible }`
   - `pub fn is_possible(&self) -> bool`
-- `struct DayForecast` - 16 public fields: `date`, `stars`, `score`, `factors: Vec<Factor>`, `best`, `is_past`, `is_today`, `precip_in`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`, `temp_max_f`, `temp_min_f`, `precip_prob_max`, `precip_prob_ride_max`, `closure_status`, `blurb`
+- `struct DayForecast` - public fields: `date`, `stars`, `score`, `factors: Vec<Factor>`, `best`, `is_past`, `is_today`, `precip_in`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`, `temp_max_f`, `temp_min_f`, `apparent_am_f`, `apparent_pm_f`, `precip_prob_max`, `precip_prob_ride_max`, `closure_status`, `blurb`, `comfort_note`, `comfort_detail`, `am_vs_avg_f`, `pm_vs_avg_f`
 
 **Private structs:**
 - `DrainageStatus { quality, daylight_fraction, note, blurb, closure_status }`

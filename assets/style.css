@@ -615,7 +615,9 @@ body {
       var(--bg-card) 78%
     );
   border: 1px solid color-mix(in srgb, var(--score-color) 35%, var(--border));
-  border-left: 4px solid var(--score-color);
+  /* Side edges encode feels-like vs recent avg (blue cool / red warm). */
+  border-left: 4px solid var(--am-temp-color, var(--score-color));
+  border-right: 4px solid var(--pm-temp-color, var(--score-color));
   border-radius: var(--radius);
   padding: 0.75rem 1rem;
   cursor: pointer;
@@ -678,13 +680,16 @@ body {
 
 .day-card:hover,
 .day-card:has(.day-card-select:focus-visible) {
-  border-color: var(--score-color);
+  /* Only top/bottom — leave AM/PM side temp colors alone. */
+  border-top-color: var(--score-color);
+  border-bottom-color: var(--score-color);
   filter: brightness(1.04);
   outline: none;
 }
 
 .day-card.selected {
-  border-color: var(--score-color);
+  border-top-color: var(--score-color);
+  border-bottom-color: var(--score-color);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--score-color) 45%, transparent),
     inset 0 0 0 1px color-mix(in srgb, var(--score-color) 20%, transparent);
@@ -811,7 +816,8 @@ body {
     );
   border: 1px solid color-mix(in srgb, var(--score-color) 35%, var(--border));
   border-top: none;
-  border-left: 3px solid var(--score-color);
+  border-left: 4px solid var(--am-temp-color, var(--score-color));
+  border-right: 4px solid var(--pm-temp-color, var(--score-color));
   border-radius: 0 0 var(--radius) var(--radius);
   padding: 0.95rem 1.1rem 1.1rem;
   margin: -2px 0 0;

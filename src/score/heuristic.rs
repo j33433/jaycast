@@ -60,6 +60,12 @@ pub struct DayForecast {
     pub comfort_note: Option<String>,
     /// Full detail line, e.g. "6° cooler than usual (AM)".
     pub comfort_detail: Option<String>,
+    /// Morning apparent temp minus trailing 7-day AM avg (°F).
+    /// Positive = warmer than recent mornings. None when insufficient history.
+    pub am_vs_avg_f: Option<f64>,
+    /// Afternoon apparent temp minus trailing 7-day PM avg (°F).
+    /// Positive = warmer than recent afternoons. None when insufficient history.
+    pub pm_vs_avg_f: Option<f64>,
 }
 
 /// Score every day in the series. Antecedent rain uses earlier days in `days`.
@@ -93,7 +99,8 @@ pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec
 }
 
 /// Mark days whose AM or PM apparent temp is unusually cool relative to the
-/// trailing 7-day average. Purely a UI annotation — does not modify scores.
+/// trailing 7-day average, and record continuous AM/PM deltas for the side bands.
+/// Purely a UI annotation — does not modify scores.
 const COMFORT_WINDOW: usize = 7;
 const COMFORT_THRESHOLD: f64 = 4.0;
 
@@ -106,21 +113,25 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
         let window = &forecasts[start..i];
         let am_vals: Vec<f64> = window.iter().map(|d| d.apparent_am_f).filter(|v| *v > 0.0).collect();
         let pm_vals: Vec<f64> = window.iter().map(|d| d.apparent_pm_f).filter(|v| *v > 0.0).collect();
-        let day = &forecasts[i];
+        let apparent_am = forecasts[i].apparent_am_f;
+        let apparent_pm = forecasts[i].apparent_pm_f;
 
-        if am_vals.len() >= 3 {
+        if am_vals.len() >= 3 && apparent_am > 0.0 {
             let avg_am = am_vals.iter().sum::<f64>() / am_vals.len() as f64;
-            if day.apparent_am_f > 0.0 && day.apparent_am_f <= avg_am - COMFORT_THRESHOLD {
-                let delta = (avg_am - day.apparent_am_f).round();
+            forecasts[i].am_vs_avg_f = Some(apparent_am - avg_am);
+            if apparent_am <= avg_am - COMFORT_THRESHOLD {
+                let delta = (avg_am - apparent_am).round();
                 forecasts[i].comfort_note = Some("AM".into());
                 forecasts[i].comfort_detail = Some(format!("{delta:.0}° below avg AM"));
-                continue;
             }
         }
-        if pm_vals.len() >= 3 {
+        if pm_vals.len() >= 3 && apparent_pm > 0.0 {
             let avg_pm = pm_vals.iter().sum::<f64>() / pm_vals.len() as f64;
-            if day.apparent_pm_f > 0.0 && day.apparent_pm_f <= avg_pm - COMFORT_THRESHOLD {
-                let delta = (avg_pm - day.apparent_pm_f).round();
+            forecasts[i].pm_vs_avg_f = Some(apparent_pm - avg_pm);
+            if forecasts[i].comfort_note.is_none()
+                && apparent_pm <= avg_pm - COMFORT_THRESHOLD
+            {
+                let delta = (avg_pm - apparent_pm).round();
                 forecasts[i].comfort_note = Some("PM".into());
                 forecasts[i].comfort_detail = Some(format!("{delta:.0}° below avg PM"));
             }
@@ -243,6 +254,8 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
         blurb,
         comfort_note: None,
         comfort_detail: None,
+        am_vs_avg_f: None,
+        pm_vs_avg_f: None,
     }
 }
 
@@ -1424,6 +1437,49 @@ mod tests {
         );
         // Trailing avg 90.0, day 85.0 → 5° below avg.
         assert_eq!(d.comfort_detail.as_deref(), Some("5° below avg AM"));
+        assert!(
+            (d.am_vs_avg_f.unwrap() - (-5.0)).abs() < 1e-9,
+            "expected am_vs_avg_f ≈ -5"
+        );
+    }
+
+    #[test]
+    fn warm_morning_records_positive_am_delta() {
+        let mut days = Vec::new();
+        for i in 1..=7 {
+            days.push(day(&format!("2026-07-{i:02}"), 0.0, 95.0));
+        }
+        // day() sets apparent_am_f = high - 5 = 90 for prior days
+        let mut warm = day("2026-07-08", 0.0, 95.0);
+        warm.apparent_am_f = 95.0;
+        days.push(warm);
+        let today = NaiveDate::from_ymd_opt(2026, 7, 8).unwrap();
+        let scored = score_days(&days, today, &Params::default());
+        let d = scored.iter().find(|d| d.date == today).unwrap();
+        assert!(d.comfort_note.is_none());
+        assert!(
+            (d.am_vs_avg_f.unwrap() - 5.0).abs() < 1e-9,
+            "expected am_vs_avg_f ≈ +5"
+        );
+    }
+
+    #[test]
+    fn warm_afternoon_records_positive_pm_delta() {
+        let mut days = Vec::new();
+        for i in 1..=7 {
+            days.push(day(&format!("2026-07-{i:02}"), 0.0, 95.0));
+        }
+        // day() sets apparent_pm_f = high + 2 = 97 for prior days
+        let mut warm = day("2026-07-08", 0.0, 95.0);
+        warm.apparent_pm_f = 102.0;
+        days.push(warm);
+        let today = NaiveDate::from_ymd_opt(2026, 7, 8).unwrap();
+        let scored = score_days(&days, today, &Params::default());
+        let d = scored.iter().find(|d| d.date == today).unwrap();
+        assert!(
+            (d.pm_vs_avg_f.unwrap() - 5.0).abs() < 1e-9,
+            "expected pm_vs_avg_f ≈ +5"
+        );
     }
 
     #[test]
@@ -1439,6 +1495,14 @@ mod tests {
             d.comfort_note.is_none(),
             "no outlier expected when temps are steady"
         );
+        assert!(
+            d.am_vs_avg_f.unwrap().abs() < 1e-9,
+            "steady temps should yield ~0 AM delta"
+        );
+        assert!(
+            d.pm_vs_avg_f.unwrap().abs() < 1e-9,
+            "steady temps should yield ~0 PM delta"
+        );
     }
 
     #[test]
@@ -1453,6 +1517,14 @@ mod tests {
         assert!(
             d.comfort_note.is_none(),
             "no outlier expected with insufficient trailing data"
+        );
+        assert!(
+            d.am_vs_avg_f.is_none(),
+            "no AM delta without full trailing window"
+        );
+        assert!(
+            d.pm_vs_avg_f.is_none(),
+            "no PM delta without full trailing window"
         );
     }
 }
