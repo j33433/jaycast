@@ -632,10 +632,6 @@ fn Timeline(
                         let card_label = format!("Show details for {date_s}");
                         let dow = if is_today {
                             "Today".to_string()
-                        } else if date == Local::now().date_naive() - Duration::days(1) {
-                            "Yesterday".to_string()
-                        } else if is_past {
-                            format!("{} · past", format_dow(date))
                         } else {
                             format_dow(date)
                         };

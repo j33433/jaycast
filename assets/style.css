@@ -605,7 +605,8 @@ body {
   --score-color: var(--border);
   display: grid;
   grid-template-columns: 4.5rem 1fr auto;
-  gap: 0.75rem;
+  column-gap: 0.4rem;
+  row-gap: 0.75rem;
   align-items: center;
   background:
     linear-gradient(
@@ -711,7 +712,8 @@ body {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--jay) 30%, transparent);
 }
 
-/* Sat/Sun labels stand out for ride planning */
+/* Today / Sat / Sun labels stand out for ride planning */
+.day-card.today .date .dow,
 .day-card.weekend .date .dow {
   color: var(--jay);
   font-weight: 700;
@@ -788,7 +790,7 @@ body {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   color: var(--rain);
-  min-width: 3.5rem;
+  min-width: 2.75rem;
 }
 
 .day-card .temp-row {
@@ -1055,5 +1057,15 @@ body {
   .header .location {
     margin-top: 0.45rem;
     font-size: 0.78rem;
+  }
+
+  .day-card {
+    grid-template-columns: 3.75rem 1fr auto;
+    column-gap: 0.3rem;
+    padding: 0.7rem 0.65rem;
+  }
+
+  .day-card .precip {
+    min-width: 2.4rem;
   }
 }
