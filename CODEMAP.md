@@ -243,15 +243,15 @@ Open-Meteo weather client (336 lines). Private module `types` re-exported.
 - `pub fn load_model_pref() -> WeatherModel` - localStorage, defaults to GFS
 - `pub fn save_model_pref(model: WeatherModel)`
 - `pub async fn fetch_forecast(model, trail) -> Result<ForecastResponse, String>` - checks cache, fetches via gloo-net, saves cache
-- `pub async fn fetch_historical_analysis(start, end, trail) -> Result<ForecastResponse, String>` - archive API for completed days
+- `pub async fn fetch_historical_analysis(model, start, end, trail) -> Result<ForecastResponse, String>` - archive API for completed days using the selected model
 - `pub fn combine_history_and_forecast(history, forecast, today) -> Vec<DayWeather>` - retains past days from history, future days from forecast
 - `pub fn build_date_range_url(model, start, end, trail) -> String` - forecast API URL for a fixed date range
-- `pub fn build_historical_url(start, end, trail) -> String` - archive API URL (ecmwf_ifs model)
+- `pub fn build_historical_url(model, start, end, trail) -> String` - archive API URL (`gfs_seamless` or `ecmwf_ifs`)
 - `pub fn clear_cache_for_trail(model, trail)`
 
 **Functions (private):** `build_url`, `append_weather_fields`, `load_cache`, `save_cache`, `history_cache_key`
 
-**Tests (2):** `historical_analysis_replaces_completed_forecast_days`, `trail_requests_and_caches_are_location_specific`
+**Tests (3):** `historical_analysis_replaces_completed_forecast_days`, `trail_requests_and_caches_are_location_specific`, `historical_archive_follows_selected_model`
 
 ### `src/weather/types.rs`
 

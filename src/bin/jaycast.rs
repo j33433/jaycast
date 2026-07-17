@@ -59,45 +59,46 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         _ => return Err(format!("unknown model {model:?}; use gfs, ecmwf, or both")),
     };
     let fetch_start = start - Duration::days(3);
-    let historical = (fetch_start < today)
-        .then(|| {
-            let history_end = today - Duration::days(1);
-            fetch_forecast(
-                build_historical_url(fetch_start, history_end, trail),
-                "historical IFS analysis",
-            )
-        })
-        .transpose()?;
-    let historical_days = historical
-        .as_ref()
-        .map(ForecastResponse::days)
-        .unwrap_or_default();
+    let history_end = today - Duration::days(1);
 
-    if start < today {
-        let history_end = end.min(today - Duration::days(1));
-        let response = historical
+    for model in models {
+        let historical = (fetch_start < today)
+            .then(|| {
+                fetch_forecast(
+                    build_historical_url(model, fetch_start, history_end, trail),
+                    &format!("historical {} archive", model.short()),
+                )
+            })
+            .transpose()?;
+        let historical_days = historical
             .as_ref()
-            .ok_or_else(|| "historical data was not loaded".to_string())?;
-        print_range_analysis(
-            "Historical ECMWF IFS analysis",
-            response.latitude,
-            response.longitude,
-            start,
-            history_end,
-            &historical_days,
-            today,
-            trail,
-        )?;
-    }
+            .map(ForecastResponse::days)
+            .unwrap_or_default();
 
-    if end >= today {
-        let forecast_start = fetch_start.max(today);
-        for model in models {
+        if start < today {
+            let range_end = end.min(history_end);
+            let response = historical
+                .as_ref()
+                .ok_or_else(|| "historical data was not loaded".to_string())?;
+            print_range_analysis(
+                &format!("Historical {} archive", model.short()),
+                response.latitude,
+                response.longitude,
+                start,
+                range_end,
+                &historical_days,
+                today,
+                trail,
+            )?;
+        }
+
+        if end >= today {
+            let forecast_start = fetch_start.max(today);
             let response = fetch_forecast(
                 build_date_range_url(model, forecast_start, end, trail),
                 model.short(),
             )?;
-            let mut days = historical_days.clone();
+            let mut days = historical_days;
             days.extend(response.days());
             days.sort_by_key(|day| day.date);
             print_range_analysis(

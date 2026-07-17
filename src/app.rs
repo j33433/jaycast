@@ -55,7 +55,9 @@ pub fn App() -> impl IntoView {
                     let today = Local::now().date_naive();
                     let history_start = today - Duration::days(weather::PAST_DAYS.into());
                     let history_end = today - Duration::days(1);
-                    match weather::fetch_historical_analysis(history_start, history_end, t).await {
+                    match weather::fetch_historical_analysis(m, history_start, history_end, t)
+                        .await
+                    {
                         Ok(history) => {
                             if model.get_untracked() != m || trail.get_untracked() != t {
                                 return;
@@ -337,7 +339,7 @@ fn ReadyView(
                 )}
             </p>
             <p>
-                "Completed days use ECMWF IFS historical analysis; today onward uses "
+                "Past and forecast days both use "
                 {move || model.get().label()}
                 "."
             </p>

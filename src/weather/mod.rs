@@ -20,7 +20,7 @@ pub const VIEW_DAYS: usize = 9;
 
 const CACHE_TTL_SECS: i64 = 90 * 60; // 1.5 hours
 const MODEL_PREF_KEY: &str = "jaycast:model-pref";
-const HISTORY_CACHE_KEY: &str = "jaycast:om:v2-history";
+const HISTORY_CACHE_KEY: &str = "jaycast:om:v3-history";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WeatherModel {
@@ -144,21 +144,25 @@ pub async fn fetch_forecast(model: WeatherModel, trail: Trail) -> Result<Forecas
     Ok(payload)
 }
 
-/// Fetch observation-informed ECMWF IFS analysis for completed days.
+/// Fetch archive weather for completed days using the selected model.
 pub async fn fetch_historical_analysis(
+    model: WeatherModel,
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
     trail: Trail,
 ) -> Result<ForecastResponse, String> {
     let start_s = start.to_string();
     let end_s = end.to_string();
-    let cache_key = history_cache_key(trail);
+    let cache_key = history_cache_key(model, trail);
     if let Some(cached) = load_cache(&cache_key, Some(&start_s), Some(&end_s)) {
         return Ok(cached);
     }
 
-    let resp = fetch_with_retry(&build_historical_url(start, end, trail), "Historical weather")
-        .await?;
+    let resp = fetch_with_retry(
+        &build_historical_url(model, start, end, trail),
+        "Historical weather",
+    )
+    .await?;
 
     let payload: ForecastResponse = resp
         .json()
@@ -169,7 +173,7 @@ pub async fn fetch_historical_analysis(
     Ok(payload)
 }
 
-/// Completed days use historical analysis; today and future use the selected forecast model.
+/// Completed days use the selected model's archive; today and future use its forecast.
 pub fn combine_history_and_forecast(
     mut history: Vec<DayWeather>,
     forecast: Vec<DayWeather>,
@@ -182,7 +186,7 @@ pub fn combine_history_and_forecast(
 }
 
 fn build_url(model: WeatherModel, trail: Trail) -> String {
-    // Completed days come from historical analysis, so only future days are needed here.
+    // Completed days come from the selected model's archive; only recent/future days here.
     let mut url = format!(
         "{}?latitude={}&longitude={}\
          &timezone={TIMEZONE}\
@@ -223,15 +227,19 @@ pub fn build_date_range_url(
     url
 }
 
-/// Build an Open-Meteo historical analysis request for completed past days.
+/// Build an Open-Meteo archive request for completed past days using the selected model.
 pub fn build_historical_url(
+    model: WeatherModel,
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
     trail: Trail,
 ) -> String {
+    let models = model
+        .models_param()
+        .expect("weather model must declare an archive models param");
     let mut url = format!(
         "https://archive-api.open-meteo.com/v1/archive?latitude={}&longitude={}\
-         &timezone={TIMEZONE}&start_date={start}&end_date={end}&models=ecmwf_ifs",
+         &timezone={TIMEZONE}&start_date={start}&end_date={end}&models={models}",
         trail.latitude(),
         trail.longitude(),
     );
@@ -290,12 +298,16 @@ fn save_cache(
 pub fn clear_cache_for_trail(model: WeatherModel, trail: Trail) {
     if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
         let _ = storage.remove_item(&model.cache_key(trail));
-        let _ = storage.remove_item(&history_cache_key(trail));
+        let _ = storage.remove_item(&history_cache_key(model, trail));
     }
 }
 
-fn history_cache_key(trail: Trail) -> String {
-    format!("{HISTORY_CACHE_KEY}:{}", trail.slug())
+fn history_cache_key(model: WeatherModel, trail: Trail) -> String {
+    format!(
+        "{HISTORY_CACHE_KEY}:{}:{}",
+        trail.slug(),
+        model.short().to_lowercase()
+    )
 }
 
 #[cfg(test)]
@@ -352,6 +364,26 @@ mod tests {
         assert_ne!(
             WeatherModel::Ecmwf.cache_key(Trail::Markham),
             WeatherModel::Ecmwf.cache_key(Trail::QuietWaters)
+        );
+    }
+
+    #[test]
+    fn historical_archive_follows_selected_model() {
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 7, 15).unwrap();
+        let ecmwf = build_historical_url(WeatherModel::Ecmwf, date, date, Trail::Markham);
+        let gfs = build_historical_url(WeatherModel::GfsSeamless, date, date, Trail::Markham);
+
+        assert!(ecmwf.contains("archive-api.open-meteo.com"));
+        assert!(ecmwf.contains("models=ecmwf_ifs"));
+        assert!(gfs.contains("models=gfs_seamless"));
+        assert!(!gfs.contains("models=ecmwf_ifs"));
+        assert_ne!(
+            history_cache_key(WeatherModel::Ecmwf, Trail::Markham),
+            history_cache_key(WeatherModel::GfsSeamless, Trail::Markham)
+        );
+        assert_ne!(
+            history_cache_key(WeatherModel::Ecmwf, Trail::Markham),
+            history_cache_key(WeatherModel::Ecmwf, Trail::QuietWaters)
         );
     }
 }
