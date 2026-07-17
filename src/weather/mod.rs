@@ -53,13 +53,13 @@ impl WeatherModel {
     fn models_param(self) -> Option<&'static str> {
         match self {
             WeatherModel::GfsSeamless => Some("gfs_seamless"),
-            WeatherModel::Ecmwf => None,
+            WeatherModel::Ecmwf => Some("ecmwf_ifs"),
         }
     }
 
     fn cache_key(self, trail: Trail) -> String {
         format!(
-            "jaycast:om:v11:{}:{}",
+            "jaycast:om:v12:{}:{}",
             trail.slug(),
             self.short().to_lowercase()
         )
@@ -343,9 +343,12 @@ mod tests {
         let date = chrono::NaiveDate::from_ymd_opt(2026, 7, 11).unwrap();
         let markham = build_date_range_url(WeatherModel::Ecmwf, date, date, Trail::Markham);
         let quiet = build_date_range_url(WeatherModel::Ecmwf, date, date, Trail::QuietWaters);
+        let gfs = build_date_range_url(WeatherModel::GfsSeamless, date, date, Trail::Markham);
 
         assert!(markham.contains("latitude=26.129830519474492"));
         assert!(quiet.contains("latitude=26.31012294823712"));
+        assert!(markham.contains("models=ecmwf_ifs"));
+        assert!(gfs.contains("models=gfs_seamless"));
         assert_ne!(
             WeatherModel::Ecmwf.cache_key(Trail::Markham),
             WeatherModel::Ecmwf.cache_key(Trail::QuietWaters)
