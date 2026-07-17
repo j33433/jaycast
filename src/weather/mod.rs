@@ -18,7 +18,7 @@ pub const FORECAST_DAYS: u32 = 8;
 /// Days shown in the timeline window at once (yesterday + today + next 7).
 pub const VIEW_DAYS: usize = 9;
 
-const CACHE_TTL_SECS: i64 = 90 * 60; // 1.5 hours
+const CACHE_TTL_SECS: i64 = 30 * 60; // 30 minutes
 const MODEL_PREF_KEY: &str = "jaycast:model-pref";
 const HISTORY_CACHE_KEY: &str = "jaycast:om:v3-history";
 
@@ -126,7 +126,10 @@ async fn fetch_with_retry(
     Err(last_err)
 }
 
-pub async fn fetch_forecast(model: WeatherModel, trail: Trail) -> Result<ForecastResponse, String> {
+/// Forecast payload plus the unix timestamp when it was last fetched from Open-Meteo.
+pub type WeatherFetch = (ForecastResponse, i64);
+
+pub async fn fetch_forecast(model: WeatherModel, trail: Trail) -> Result<WeatherFetch, String> {
     let cache_key = model.cache_key(trail);
     if let Some(cached) = load_cache(&cache_key, None, None) {
         return Ok(cached);
@@ -140,8 +143,8 @@ pub async fn fetch_forecast(model: WeatherModel, trail: Trail) -> Result<Forecas
         .await
         .map_err(|e| format!("Failed to parse weather data: {e}"))?;
 
-    save_cache(&cache_key, None, None, &payload);
-    Ok(payload)
+    let fetched_at = save_cache(&cache_key, None, None, &payload);
+    Ok((payload, fetched_at))
 }
 
 /// Fetch archive weather for completed days using the selected model.
@@ -150,7 +153,7 @@ pub async fn fetch_historical_analysis(
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
     trail: Trail,
-) -> Result<ForecastResponse, String> {
+) -> Result<WeatherFetch, String> {
     let start_s = start.to_string();
     let end_s = end.to_string();
     let cache_key = history_cache_key(model, trail);
@@ -169,8 +172,8 @@ pub async fn fetch_historical_analysis(
         .await
         .map_err(|e| format!("Failed to parse historical weather data: {e}"))?;
 
-    save_cache(&cache_key, Some(&start_s), Some(&end_s), &payload);
-    Ok(payload)
+    let fetched_at = save_cache(&cache_key, Some(&start_s), Some(&end_s), &payload);
+    Ok((payload, fetched_at))
 }
 
 /// Completed days use the selected model's archive; today and future use its forecast.
@@ -261,7 +264,7 @@ fn load_cache(
     key: &str,
     start_date: Option<&str>,
     end_date: Option<&str>,
-) -> Option<ForecastResponse> {
+) -> Option<WeatherFetch> {
     let storage = window()?.local_storage().ok()??;
     let raw = storage.get_item(key).ok()??;
     let entry: CacheEntry = serde_json::from_str(&raw).ok()?;
@@ -272,7 +275,7 @@ fn load_cache(
     if entry.start_date.as_deref() != start_date || entry.end_date.as_deref() != end_date {
         return None;
     }
-    Some(entry.payload)
+    Some((entry.payload, entry.fetched_at))
 }
 
 fn save_cache(
@@ -280,12 +283,13 @@ fn save_cache(
     start_date: Option<&str>,
     end_date: Option<&str>,
     payload: &ForecastResponse,
-) {
+) -> i64 {
+    let fetched_at = chrono::Utc::now().timestamp();
     let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) else {
-        return;
+        return fetched_at;
     };
     let entry = CacheEntry {
-        fetched_at: chrono::Utc::now().timestamp(),
+        fetched_at,
         start_date: start_date.map(str::to_string),
         end_date: end_date.map(str::to_string),
         payload: payload.clone(),
@@ -293,6 +297,7 @@ fn save_cache(
     if let Ok(raw) = serde_json::to_string(&entry) {
         let _ = storage.set_item(key, &raw);
     }
+    fetched_at
 }
 
 pub fn clear_cache_for_trail(model: WeatherModel, trail: Trail) {

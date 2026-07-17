@@ -1,4 +1,4 @@
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Duration, Local, NaiveDate, TimeZone};
 use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -51,14 +51,14 @@ pub fn App() -> impl IntoView {
         state.set(LoadState::Loading);
         spawn_local(async move {
             match weather::fetch_forecast(m, t).await {
-                Ok(forecast) => {
+                Ok((forecast, forecast_at)) => {
                     let today = Local::now().date_naive();
                     let history_start = today - Duration::days(weather::PAST_DAYS.into());
                     let history_end = today - Duration::days(1);
                     match weather::fetch_historical_analysis(m, history_start, history_end, t)
                         .await
                     {
-                        Ok(history) => {
+                        Ok((history, _)) => {
                             if model.get_untracked() != m || trail.get_untracked() != t {
                                 return;
                             }
@@ -97,7 +97,7 @@ pub fn App() -> impl IntoView {
                             }
 
                             is_first_load.set(false);
-                            refreshed_at.set(Local::now().format("%-I:%M %p").to_string());
+                            refreshed_at.set(format_weather_as_of(forecast_at));
                             state.set(LoadState::Ready(scored));
                         }
                         Err(e) => {
@@ -515,9 +515,9 @@ fn Hero(
                 {move || {
                     let t = refreshed_at.get();
                     if t.is_empty() {
-                        "updated...".to_string()
+                        "forecast...".to_string()
                     } else {
-                        format!("updated {t}")
+                        format!("forecast as of {t}")
                     }
                 }}
             </p>
@@ -885,6 +885,15 @@ fn smooth_wave_path(values: &[f64], height: impl Fn(f64) -> f64) -> String {
         ));
     }
     path
+}
+
+/// Local clock time when forecast weather was last pulled from Open-Meteo (or cache age).
+fn format_weather_as_of(fetched_at: i64) -> String {
+    Local
+        .timestamp_opt(fetched_at, 0)
+        .single()
+        .map(|t| t.format("%-I:%M %p").to_string())
+        .unwrap_or_else(|| Local::now().format("%-I:%M %p").to_string())
 }
 
 fn format_long(d: NaiveDate) -> String {
