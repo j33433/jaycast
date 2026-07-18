@@ -296,20 +296,21 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
 
     // Timing quality.
     // SandPack: best near ideal_hours_since_rain, fades to dry_timing_floor.
-    // MixedSurface: mud ding for rain today or <24h, ramps to dry baseline by 48h.
+    // MixedSurface: hour-aware mud window from last rain end to ride morning.
     let is_mixed = p.model == RideabilityModel::MixedSurface;
     let today_significant = day.precip_in >= p.significant_rain_in;
+    let hours_since_end = hours_since_rain_end_by_morning(days, idx, p);
+    let morning_mud = hours_since_end.map_or(false, |h| h < p.mud_clear_hours);
+    let muddy = morning_mud || today_significant;
     let timing_q = if is_mixed {
-        // MixedSurface uses raw hours_since (not ET0-adjusted) — mud is a
-        // physical drainage time, not a sun-drying clock.
-        let mud = today_significant || hours_since.map_or(false, |h| h <= 24.0);
-        match hours_since {
+        // MixedSurface uses raw hours since rain end (not ET0-adjusted).
+        match hours_since_end {
             None if !today_significant => p.dry_timing_floor,
-            _ if mud => p.fresh_rain_floor,
-            Some(h) if h < 48.0 => lerp(
+            _ if muddy => p.fresh_rain_floor,
+            Some(h) if h < p.mud_clear_hours + 24.0 => lerp(
                 p.fresh_rain_floor,
                 p.dry_timing_floor,
-                ((h - 24.0) / 24.0).clamp(0.0, 1.0),
+                ((h - p.mud_clear_hours) / 24.0).clamp(0.0, 1.0),
             ),
             _ => p.dry_timing_floor,
         }
@@ -355,11 +356,10 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     let pack = (0.45 * amount_q + 0.40 * timing_q + 0.15 * wet_q).clamp(0.0, 1.0);
 
     let timing_note = if is_mixed {
-        let mud = today_significant || hours_since.map_or(false, |h| h <= 24.0);
-        if mud {
-            let label = mud_period_blurb(days, idx, p);
+        if muddy {
+            let label = mud_period_blurb(days, idx, p, morning_mud);
             format!("{label} - let it drain")
-        } else if hours_since.map_or(false, |h| h < 48.0) {
+        } else if hours_since_end.map_or(false, |h| h < p.mud_clear_hours + 24.0) {
             "drying, firming up".into()
         } else {
             "dry hardpack - fast and firm".into()
@@ -826,30 +826,108 @@ fn wet_period_blurb(day: &DayWeather) -> String {
 
 /// Mud period label for MixedSurface trails: "mud AM", "mud PM", or "mud".
 ///
-/// When the ride day itself has significant rain, uses today's 3h buckets.
-/// When rain fell the day before (overnight carryover), checks yesterday's
-/// buckets — PM/evening rain carries into the AM as overnight wetness.
-fn mud_period_blurb(days: &[DayWeather], idx: usize, p: &Params) -> String {
+/// Prefer today's rain timing when the ride day itself is wet. Otherwise a
+/// still-wet trail at ride morning is mud AM (hour-aware overnight carryover).
+fn mud_period_blurb(
+    days: &[DayWeather],
+    idx: usize,
+    p: &Params,
+    morning_mud: bool,
+) -> String {
     let today = &days[idx];
     if today.precip_in >= p.significant_rain_in {
         return mud_label_from_3h(&today.precip_3h_in);
     }
-    if idx > 0 {
-        let prev = &days[idx - 1];
-        if prev.precip_in >= p.significant_rain_in {
-            // Yesterday's PM/evening rain → overnight wetness → mud AM.
-            let prev_am = prev.precip_3h_in[0] + prev.precip_3h_in[1]
-                + prev.precip_3h_in[2]
-                + prev.precip_3h_in[3];
-            let prev_pm =
-                prev.precip_3h_in[4] + prev.precip_3h_in[5] + prev.precip_3h_in[6] + prev.precip_3h_in[7];
-            if prev_pm > prev_am && prev_pm > 0.0 {
-                return "mud AM".into();
-            }
-            return mud_label_from_3h(&prev.precip_3h_in);
-        }
+    if morning_mud {
+        return "mud AM".into();
     }
     "mud".into()
+}
+
+/// Hours from last meaningful rain end to ride morning (8 AM), counting only
+/// rain that has already ended by then. Future/afternoon forecast rain on the
+/// ride day is ignored so it does not fake a muddy morning.
+fn hours_since_rain_end_by_morning(
+    days: &[DayWeather],
+    idx: usize,
+    p: &Params,
+) -> Option<f64> {
+    const RIDE_MORNING_HOUR: f64 = 8.0;
+    let event = latest_rain_event_ending_by(days, idx, p, RIDE_MORNING_HOUR)?;
+    Some(RIDE_MORNING_HOUR - event.end_hour)
+}
+
+/// Latest meaningful rain event whose end is at or before `by_hour` (relative
+/// to the start of the scored day). Uses hourly precip when present, else
+/// spreads 3h buckets, else places daily total at midday.
+fn latest_rain_event_ending_by(
+    days: &[DayWeather],
+    idx: usize,
+    p: &Params,
+    by_hour: f64,
+) -> Option<RainEvent> {
+    let mut total_in = 0.0;
+    let mut end_hour = None;
+    let mut start_hour = None;
+    let mut dry_hours = 0usize;
+
+    for day_idx in (0..=idx).rev() {
+        let day = &days[day_idx];
+        let hourly = precip_hourly_for_event(day, p);
+        for hour in (0..24).rev() {
+            let rel_hour = hour as f64 - (idx - day_idx) as f64 * 24.0;
+            let hour_end = rel_hour + 1.0;
+            if hour_end > by_hour {
+                continue;
+            }
+            let amount = hourly[hour];
+            if amount >= TRACE_RAIN_IN {
+                if dry_hours > RAIN_EVENT_GAP_HOURS && end_hour.is_some() {
+                    if total_in >= p.significant_rain_in {
+                        return Some(RainEvent {
+                            total_in,
+                            end_hour: end_hour.expect("rain event has an end hour"),
+                            start_hour: start_hour.expect("rain event has a start hour"),
+                        });
+                    }
+                    total_in = 0.0;
+                    end_hour = None;
+                }
+                total_in += amount;
+                end_hour.get_or_insert(hour_end);
+                start_hour = Some(rel_hour);
+                dry_hours = 0;
+            } else if end_hour.is_some() {
+                dry_hours += 1;
+            }
+        }
+    }
+
+    (total_in >= p.significant_rain_in).then(|| RainEvent {
+        total_in,
+        end_hour: end_hour.expect("meaningful rain event has an end hour"),
+        start_hour: start_hour.expect("meaningful rain event has a start hour"),
+    })
+}
+
+fn precip_hourly_for_event(day: &DayWeather, p: &Params) -> [f64; 24] {
+    if day.precip_hourly_in.iter().any(|amount| *amount > 0.0) {
+        return day.precip_hourly_in;
+    }
+    if day.precip_3h_in.iter().any(|amount| *amount > 0.0) {
+        let mut hourly = [0.0; 24];
+        for (bucket, amount) in day.precip_3h_in.iter().enumerate() {
+            for offset in 0..3 {
+                hourly[bucket * 3 + offset] = amount / 3.0;
+            }
+        }
+        return hourly;
+    }
+    let mut hourly = [0.0; 24];
+    if day.precip_in >= p.significant_rain_in {
+        hourly[11] = day.precip_in;
+    }
+    hourly
 }
 
 fn mud_label_from_3h(buckets: &[f64; 8]) -> String {
@@ -1346,11 +1424,13 @@ mod tests {
     }
 
     #[test]
-    fn quiet_waters_mud_am_from_overnight() {
-        // Rain yesterday PM, dry today — overnight wetness carries into AM.
+    fn quiet_waters_mud_am_from_late_evening() {
+        // Late evening rain yesterday still wet at 8 AM (end ~11 PM → ~9h).
         let mut prev = day("2026-07-01", 0.50, 88.0);
-        prev.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.20, 0.20, 0.10, 0.0];
-        prev.precip_pm_in = 0.40;
+        prev.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.10, 0.40];
+        prev.precip_pm_in = 0.50;
+        prev.precip_hourly_in[21] = 0.10;
+        prev.precip_hourly_in[22] = 0.40;
         let dry_today = day("2026-07-02", 0.0, 88.0);
         let days = vec![prev, dry_today];
         let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
@@ -1363,7 +1443,36 @@ mod tests {
         assert_eq!(d.blurb, "mud AM");
         assert!(
             d.stars < 3.5,
-            "overnight mud AM should ding the score, got {:.1} stars",
+            "late-evening mud AM should ding the score, got {:.1} stars",
+            d.stars
+        );
+    }
+
+    #[test]
+    fn quiet_waters_afternoon_storm_clears_by_next_morning() {
+        // Jul 18 2026 observation: prior ~3 PM storm was not muddy by morning.
+        let mut prev = day("2026-07-17", 0.42, 95.0);
+        prev.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.42, 0.0, 0.0];
+        prev.precip_pm_in = 0.42;
+        prev.precip_hourly_in[15] = 0.42;
+        let dry_today = day("2026-07-18", 0.0, 92.0);
+        let days = vec![prev, dry_today];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 18).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = &scored[1];
+        assert_ne!(d.blurb, "mud AM", "afternoon storm should clear overnight");
+        assert!(
+            !d.blurb.starts_with("mud"),
+            "expected recovered trail, got '{}'",
+            d.blurb
+        );
+        assert!(
+            d.stars >= 3.5,
+            "cleared overnight should score decently, got {:.1} stars",
             d.stars
         );
     }

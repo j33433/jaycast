@@ -36,6 +36,9 @@ pub struct Params {
     pub drainage_ref_rain_in: f64,
     /// Minimum fraction of drainage_hours for trace-level rain (0..1).
     pub drainage_scale_floor: f64,
+    /// Hours after rain ends before MixedSurface is no longer muddy at ride morning.
+    /// Afternoon storms that finish by ~4 PM clear by the next 8 AM ride window.
+    pub mud_clear_hours: f64,
     /// Ride-window rain amount that starts a real "rained-on ride" penalty (inches).
     pub ride_day_precip_soft: f64,
     /// Ride-window rain amount that fully tanks the ride (inches).
@@ -82,6 +85,7 @@ impl Default for Params {
             drainage_hours: 8.5,
             drainage_ref_rain_in: 0.70,
             drainage_scale_floor: 0.35,
+            mud_clear_hours: 14.0,
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
             fresh_rain_floor: 0.35,
@@ -127,6 +131,9 @@ impl Params {
                 params.ideal_hours_since_rain = 30.0;
                 params.pack_fade_hours = 120.0;
                 params.dry_timing_floor = 0.90;
+                // Jul 18 2026: prior-day afternoon storm (rain end ~5 PM) was not
+                // muddy by morning. 14h clear window drops typical PM convection.
+                params.mud_clear_hours = 14.0;
                 // QW never closes and degrades slowly, so be more generous with
                 // ride-window rain thresholds and the fresh-rain timing curve.
                 params.ride_day_precip_soft = 0.12;
