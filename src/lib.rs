@@ -5,6 +5,8 @@ pub mod score;
 mod theme;
 pub mod trails;
 pub mod weather;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod xweather;
 
 use leptos::prelude::*;
 use wasm_bindgen::prelude::*;

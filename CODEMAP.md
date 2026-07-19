@@ -34,6 +34,8 @@ jaycast/
       types.rs
     bin/
       jaycast.rs
+    xweather/
+      mod.rs
   tests/
     fixtures/
       markham-2mo.json
@@ -44,7 +46,7 @@ jaycast/
 
 | File | Description |
 |------|-------------|
-| `Cargo.toml` | Package manifest. Crate types `cdylib` + `rlib`. Deps: leptos 0.7 (csr), gloo-net, serde, serde_json, chrono, wasm-bindgen, web-sys, console_error_panic_hook. Native-only: ureq. Feature `cli` gates the binary. Release profile: `opt-level="z"`, lto, single codegen unit. |
+| `Cargo.toml` | Package manifest. Crate types `cdylib` + `rlib`. Deps: leptos 0.7 (csr), gloo-net, serde, serde_json, chrono, wasm-bindgen, web-sys, console_error_panic_hook. Native-only: ureq. Feature `cli` gates the binary (analyze, backtest, xweather). Release profile: `opt-level="z"`, lto, single codegen unit. |
 | `Cargo.lock` | Dependency lockfile (auto-generated). |
 | `Trunk.toml` | Trunk build config. Target `index.html`, dist dir `dist/`, public URL `/jaycast/`. |
 | `index.html` | App entry HTML. Inline JS applies saved theme before render. OpenGraph/Twitter meta, JSON-LD structured data. Trunk asset links for icon, CSS, WASM, and copy-file directives for SVGs, LICENSE, robots.txt, sitemap.xml. |
@@ -282,13 +284,21 @@ Open-Meteo API response types and day-window extraction (302 lines).
 
 ## src/bin/
 
+### `src/xweather/mod.rs`
+
+Native-only Xweather hourly rain feed builder (`#[cfg(not(target_arch = "wasm32"))]`). Auth via `XWEATHER_API_KEY`. Fetches `/observations/archive/{id}` for Markham and Camp Murphy stations, buckets `precipSinceLastObIN` into 24 hourly tip totals (inches), writes schema-versioned JSON.
+
+**CLI (via bin):** `jaycast xweather publish --out <PATH> [--days N]`, `jaycast xweather dump [--days N]` (default days = 2).
+
+**Tests:** day range, local hour parse, tip bucketing, stale detection.
+
 ### `src/bin/jaycast.rs`
 
-Native CLI binary (324 lines, requires `cli` feature). Uses `ureq` for HTTP.
+Native CLI binary (requires `cli` feature). Uses `ureq` for HTTP.
 
 **Functions (private):**
 - `fn main()` - dispatches to `run()`, prints help on error, exits 2
-- `fn run() -> Result<(), String>` - subcommands: `analyze`, `backtest`, `--help`/`-h`/`help`
+- `fn run() -> Result<(), String>` - subcommands: `analyze`, `backtest`, `xweather`, `--help`/`-h`/`help`
 - `fn analyze(args) -> Result<(), String>` - scores a date or inclusive range against gfs/ecmwf/both; fetches historical archive + forecast, merges, prints per-day analysis
 - `fn fetch_forecast(url, source) -> Result<ForecastResponse, String>` - ureq GET + JSON deserialize
 - `fn print_range_analysis(source, lat, lon, start, end, days, today, trail) -> Result<(), String>`

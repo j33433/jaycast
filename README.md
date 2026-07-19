@@ -34,6 +34,8 @@ trunk build --release # static site in dist/
 
 Analyze a date or inclusive range with the same scorer: `cargo run --features cli --bin jaycast -- analyze markham 2026-07-08:2026-07-11 both`. The trail slug is optional and defaults to Camp Murphy; omit the date for today.
 
+Ground-truth hourly gauge rain (Xweather, server key only): `cargo run --features cli --bin jaycast -- xweather publish --out xweather.json` (see `XWEATHER.md`).
+
 ## Score model
 
 Heuristic weights and trail profiles live in `src/score/params.rs`, `src/score/heuristic.rs`, and `src/trails.rs`.

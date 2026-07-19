@@ -22,6 +22,7 @@ fn run() -> Result<(), String> {
     match args.next().as_deref() {
         Some("analyze") => analyze(args),
         Some("backtest") => backtest(args),
+        Some("xweather") => jaycast::xweather::run(args),
         Some("--help" | "-h" | "help") | None => {
             print_help();
             Ok(())
@@ -327,7 +328,7 @@ fn backtest(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
 fn print_help() {
     eprintln!(
-        "Usage:\n  jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]\n  jaycast backtest <fixture.json> [camp-murphy|markham|quiet-waters]"
+        "Usage:\n  jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]\n  jaycast backtest <fixture.json> [camp-murphy|markham|quiet-waters]\n  jaycast xweather publish --out <PATH> [--days N]\n  jaycast xweather dump [--days N]"
     );
 }
 
