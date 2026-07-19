@@ -291,11 +291,11 @@ Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max ti
 
 ### `src/xweather/mod.rs`
 
-Native-only Xweather hourly rain feed builder (`#[cfg(not(target_arch = "wasm32"))]`). Auth via `XWEATHER_API_KEY`. Fetches `/observations/archive/{id}` for Markham and Camp Murphy stations, buckets `precipSinceLastObIN` into 24 hourly tip totals (inches), writes schema-versioned JSON.
+Native-only Xweather hourly rain feed builder (`#[cfg(not(target_arch = "wasm32"))]`). Auth via `XWEATHER_API_KEY`. Fetches `/observations/archive/{id}` for Markham, Camp Murphy, and Quiet Waters stations, buckets `precipSinceLastObIN` into 24 hourly tip totals (inches), writes schema-versioned JSON. Past-day cache; `rescan` ranks nearby gauges and rejects bad rain meters.
 
-**CLI (via bin):** `jaycast xweather publish --out <PATH> [--days N]`, `jaycast xweather dump [--days N]` (default days = 2).
+**CLI (via bin):** `publish`, `dump`, `rescan [trail]`.
 
-**Tests:** day range, local hour parse, tip bucketing, stale detection.
+**Tests:** day range, local hour parse, tip bucketing, stale detection, cache, rescan parsers.
 
 ### `src/bin/jaycast.rs`
 

@@ -5,6 +5,8 @@
 //!
 //! Completed past days are cached on disk; only today is always refetched.
 
+mod rescan;
+
 use std::{
     collections::BTreeMap,
     fs,
@@ -167,7 +169,7 @@ impl Auth {
     }
 }
 
-/// CLI entry: `xweather publish|dump …`
+/// CLI entry: `xweather publish|dump|rescan …`
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
     match args.next().as_deref() {
         Some("publish") => {
@@ -187,6 +189,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        Some("rescan") => rescan::run(args),
         Some("--help" | "-h" | "help") | None => {
             print_help();
             Ok(())
@@ -197,7 +200,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
 pub fn print_help() {
     eprintln!(
-        "Usage:\n  jaycast xweather publish --out <PATH> [--days N] [--cache PATH]\n  jaycast xweather dump [--days N] [--cache PATH]\n\nEnvironment:\n  XWEATHER_API_KEY   client_id_client_secret\n\nDefaults:\n  --days {DEFAULT_DAYS}   full local days ending today (host local date)\n  --cache  beside --out, else ./{DEFAULT_CACHE_NAME}\n\nPast days are read from the cache when present; today is always fetched."
+        "Usage:\n  jaycast xweather publish --out <PATH> [--days N] [--cache PATH]\n  jaycast xweather dump [--days N] [--cache PATH]\n  jaycast xweather rescan [trail] [--limit N] [--days N] [--candidates N]\n\nEnvironment:\n  XWEATHER_API_KEY   client_id_client_secret\n\nDefaults:\n  --days {DEFAULT_DAYS}   full local days ending today (host local date)\n  --cache  beside --out, else ./{DEFAULT_CACHE_NAME}\n\nPast days are read from the cache when present; today is always fetched.\nrescan discovers nearby gauges, rejects bad rain meters, prints recommendations."
     );
 }
 
@@ -410,6 +413,28 @@ fn day_range(today: NaiveDate, days: u32) -> (NaiveDate, NaiveDate) {
     (start, today)
 }
 
+fn http_get_json(url: &str, label: &str) -> Result<String, String> {
+    for attempt in 0..3u32 {
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_secs(1));
+        }
+        match ureq::get(url).call() {
+            Ok(response) => {
+                return response
+                    .into_string()
+                    .map_err(|e| format!("{label} response body error: {e}"));
+            }
+            Err(ureq::Error::Status(503, _)) if attempt < 2 => continue,
+            Err(ureq::Error::Status(code, resp)) => {
+                let detail = resp.into_string().unwrap_or_default();
+                return Err(format!("{label} request failed: HTTP {code} {detail}"));
+            }
+            Err(error) => return Err(format!("{label} request failed: {error}")),
+        }
+    }
+    unreachable!()
+}
+
 fn fetch_archive(
     auth: &Auth,
     station_id: &str,
@@ -432,28 +457,6 @@ fn fetch_archive(
         .response
         .and_then(|r| r.periods)
         .unwrap_or_default())
-}
-
-fn http_get_json(url: &str, label: &str) -> Result<String, String> {
-    for attempt in 0..3u32 {
-        if attempt > 0 {
-            std::thread::sleep(Duration::from_secs(1));
-        }
-        match ureq::get(url).call() {
-            Ok(response) => {
-                return response
-                    .into_string()
-                    .map_err(|e| format!("{label} response body error: {e}"));
-            }
-            Err(ureq::Error::Status(503, _)) if attempt < 2 => continue,
-            Err(ureq::Error::Status(code, resp)) => {
-                let detail = resp.into_string().unwrap_or_default();
-                return Err(format!("{label} request failed: HTTP {code} {detail}"));
-            }
-            Err(error) => return Err(format!("{label} request failed: {error}")),
-        }
-    }
-    unreachable!()
 }
 
 fn day_from_periods(date: NaiveDate, periods: &[ArchivePeriod], now_ts: i64) -> DayFeed {
