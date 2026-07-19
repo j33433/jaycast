@@ -639,10 +639,9 @@ fn Timeline(
                         let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
                         let rain_path = rain_wave_path(&d.precip_3h_in);
                         let cloud_path = cloud_wave_path(&d.cloud_3h_pct);
-                        let gauge_bins = gauge
+                        let gauge_path = gauge
                             .hourly(t, date)
-                            .map(|h| rain_gauge_bin_rects(&h))
-                            .unwrap_or_default();
+                            .map(|h| rain_gauge_wave_path(&h));
                         let date_s = format_short(date);
                         let tint = day_card_style(d.score, d.am_vs_avg_f, d.pm_vs_avg_f);
                         let detail = d.clone();
@@ -710,15 +709,19 @@ fn Timeline(
                                     >
                                         <path d=rain_path />
                                     </svg>
-                                    <svg
-                                        class="rain-bins"
-                                        viewBox="0 0 100 100"
-                                        preserveAspectRatio="none"
-                                        aria-hidden="true"
-                                        focusable="false"
-                                    >
-                                        {gauge_bins}
-                                    </svg>
+                                    {gauge_path.map(|path| {
+                                        view! {
+                                            <svg
+                                                class="rain-gauge"
+                                                viewBox="0 0 100 100"
+                                                preserveAspectRatio="none"
+                                                aria-hidden="true"
+                                                focusable="false"
+                                            >
+                                                <path d=path />
+                                            </svg>
+                                        }
+                                    })}
                                     <div class="date">
                                         {date_s}
                                         <span class="dow">{dow}</span>
@@ -871,32 +874,12 @@ fn rain_wave_path(rain_3h_in: &[f64]) -> String {
     format!("{curve} L 100 100 L 0 100 Z")
 }
 
-/// Hourly gauge tip bars (inches), same vertical scale as the model rain wave.
-fn rain_gauge_bin_rects(hourly_tips_in: &[f64; 24]) -> Vec<AnyView> {
-    const TRACE: f64 = 0.005;
-    let width = 100.0 / 24.0;
-    let gap = 0.25;
-    hourly_tips_in
-        .iter()
-        .enumerate()
-        .filter(|(_, tips)| **tips > TRACE)
-        .map(|(hour, tips)| {
-            let bar_h = (tips.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0;
-            let x = hour as f64 * width + gap * 0.5;
-            let y = 100.0 - bar_h;
-            let w = (width - gap).max(0.4);
-            view! {
-                <rect
-                    x=format!("{x:.2}")
-                    y=format!("{y:.2}")
-                    width=format!("{w:.2}")
-                    height=format!("{bar_h:.2}")
-                    rx="0.4"
-                />
-            }
-            .into_any()
-        })
-        .collect()
+/// Hourly gauge tips as a filled curve, same vertical scale as the model rain wave.
+fn rain_gauge_wave_path(hourly_tips_in: &[f64; 24]) -> String {
+    let curve = smooth_wave_path(hourly_tips_in, |inches| {
+        100.0 - (inches.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0
+    });
+    format!("{curve} L 100 100 L 0 100 Z")
 }
 
 fn cloud_wave_path(cloud_3h_pct: &[f64]) -> String {

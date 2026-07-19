@@ -123,7 +123,7 @@ Trail coordinates match `src/trails.rs`.
 |-------|-------------|--------------|-------------------|
 | **Markham Park** | 26.12983, -80.35090 | **MID_E8181** | **PWS_W4RCT** nearby; ignore **MID_D4511** rain; ASOS **KFXE** ~11 mi |
 | **Camp Murphy** | 27.01226, -80.11082 | **MID_C8019** | **PWS_JOE4SPEED** co-primary (~same distance); closer mesonets often lack precip |
-| **Quiet Waters** | 26.31012, -80.16113 | *(pick after QC)* | Candidates: PWS_363636363, MID_C6162; ASOS KPMP/KBCT farther |
+| **Quiet Waters** | 26.31012, -80.16113 | **PWS_363636363** | ~2.4 mi (boca pointe); MID_C6162 ~3.9 mi alt; WU KFLDEERF75 closer but not on Xweather; MID_SSNVV no precip |
 
 ### CWOP / MADIS ID mapping
 
@@ -184,7 +184,7 @@ Jaycast UI units are **inches** — prefer `totalIN` when comparing to the app.
 
 - **Markham precip:** use **MID_E8181** and/or **PWS_W4RCT**. Flag or ignore **MID_D4511** rain until the gauge clearly reports non-zero rain in real events.
 - **Camp Murphy precip:** use **MID_C8019** and/or **PWS_JOE4SPEED** (both ~3.2 mi; prefer either over closer no-precip mesonets).
-- **Quiet Waters:** no locked primary yet — compare 7-day `summary` for closest PWS/mesonet with `precip` and pick the one that moves with **conditions/summary**.
+- **Quiet Waters precip:** use **PWS_363636363** (~2.4 mi). MID_C6162 is a farther alt; MID_SSNVV has no precip; WU KFLDEERF75 is closer but not on Xweather.
 - Prefer `ob.trustFactor` ≥ 80 and `QCcode` 10 when present.
 - If latest `ob.dateTimeISO` is stale (e.g. >2–3 hours for a normally frequent PWS), treat as offline.
 - Sparse packets / `precip: null` → incomplete; don’t invent missing rain.
@@ -285,7 +285,7 @@ Then offline: join to Open-Meteo historical days (CLI `jaycast analyze …`) whe
 
 ## Feed CLI (hourly tips JSON)
 
-Native-only subcommand builds a static JSON file of hourly gauge tips for Markham and Camp Murphy. No Quiet Waters yet. Key stays on the host; WASM can fetch the file later without credentials.
+Native-only subcommand builds a static JSON file of hourly gauge tips for Markham, Camp Murphy, and Quiet Waters. Key stays on the host; WASM can fetch the file later without credentials.
 
 ```bash
 export XWEATHER_API_KEY='CLIENTID_CLIENTSECRET'
@@ -298,7 +298,7 @@ cargo run --features cli --bin jaycast -- xweather publish --out /path/to/xweath
 ```
 
 - `--days` defaults to **2** (yesterday + today in host local date; label timezone is `America/New_York`).
-- Stations: Markham `MID_E8181` / `PWS_W4RCT`; Camp Murphy `MID_C8019` / `PWS_JOE4SPEED`.
+- Stations: Markham `MID_E8181` / `PWS_W4RCT`; Camp Murphy `MID_C8019` / `PWS_JOE4SPEED`; Quiet Waters `PWS_363636363`.
 - Each day has `hourly_tips_in` (24 floats, inches) = sum of `precipSinceLastObIN` by local hour from `/observations/archive/{id}`.
 - **Cache:** completed past days are stored in `--cache` (default: `.jaycast-xweather-cache.json` beside `--out`, else cwd). Today is always fetched; past days hit the cache after the first pull. Retention 60 days.
 - Install/cron placement is left to the operator.
@@ -315,7 +315,7 @@ cargo run --features cli --bin jaycast -- xweather publish --out /path/to/xweath
 ```text
 Markham:      MID_E8181 (rain primary), PWS_W4RCT (near-trail PWS), MID_D4511 (rain suspect)
 Camp Murphy:  MID_C8019, PWS_JOE4SPEED
-Quiet Waters: (discover + QC; try PWS_363636363 / MID_C6162)
+Quiet Waters: PWS_363636363 (rain primary)
 
 Auth:   XWEATHER_API_KEY = client_id + '_' + client_secret
 Base:   https://data.api.xweather.com

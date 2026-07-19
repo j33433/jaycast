@@ -64,6 +64,13 @@ const TRAILS: &[TrailSpec] = &[
             },
         ],
     },
+    TrailSpec {
+        slug: "quiet-waters",
+        stations: &[StationSpec {
+            id: "PWS_363636363",
+            role: "primary",
+        }],
+    },
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
