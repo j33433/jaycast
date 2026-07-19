@@ -328,7 +328,7 @@ fn backtest(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
 fn print_help() {
     eprintln!(
-        "Usage:\n  jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]\n  jaycast backtest <fixture.json> [camp-murphy|markham|quiet-waters]\n  jaycast xweather publish --out <PATH> [--days N]\n  jaycast xweather dump [--days N]"
+        "Usage:\n  jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]\n  jaycast backtest <fixture.json> [camp-murphy|markham|quiet-waters]\n  jaycast xweather publish --out <PATH> [--days N] [--cache PATH]\n  jaycast xweather dump [--days N] [--cache PATH]"
     );
 }
 

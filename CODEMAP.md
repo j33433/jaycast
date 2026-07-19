@@ -34,6 +34,7 @@ jaycast/
       types.rs
     bin/
       jaycast.rs
+    rain_feed.rs
     xweather/
       mod.rs
   tests/
@@ -283,6 +284,10 @@ Open-Meteo API response types and day-window extraction (302 lines).
 **Tests (1):** `rain_windows_start_when_the_park_opens`
 
 ## src/bin/
+
+### `src/rain_feed.rs`
+
+Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max tip per hour across stations per trail/day. Used by day cards to draw blue hourly bins over the model rain wave. Missing feed is non-fatal (no bins).
 
 ### `src/xweather/mod.rs`
 

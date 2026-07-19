@@ -2,6 +2,8 @@
 //!
 //! Fetches station archive observations and reduces them to hourly tip totals
 //! (inches) for a static JSON feed the WASM app can load later.
+//!
+//! Completed past days are cached on disk; only today is always refetched.
 
 use std::{
     collections::BTreeMap,
@@ -19,6 +21,9 @@ const TIMEZONE: &str = "America/New_York";
 const STALE_AFTER_SECS: i64 = 3 * 60 * 60;
 const DEFAULT_DAYS: u32 = 2;
 const SCHEMA_VERSION: u32 = 1;
+const CACHE_SCHEMA: u32 = 1;
+const CACHE_RETENTION_DAYS: i64 = 60;
+const DEFAULT_CACHE_NAME: &str = ".jaycast-xweather-cache.json";
 
 #[derive(Clone, Copy, Debug)]
 struct StationSpec {
@@ -160,13 +165,16 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
     match args.next().as_deref() {
         Some("publish") => {
             let opts = parse_opts(args, true)?;
-            let feed = build_feed(opts.days)?;
-            write_atomic(&opts.out.expect("--out required"), &feed)?;
+            let out = opts.out.expect("--out required");
+            let cache_path = opts.cache.unwrap_or_else(|| default_cache_path(Some(&out)));
+            let feed = build_feed(opts.days, &cache_path)?;
+            write_atomic(&out, &feed)?;
             Ok(())
         }
         Some("dump") => {
             let opts = parse_opts(args, false)?;
-            let feed = build_feed(opts.days)?;
+            let cache_path = opts.cache.unwrap_or_else(|| default_cache_path(None));
+            let feed = build_feed(opts.days, &cache_path)?;
             let json = serde_json::to_string_pretty(&feed)
                 .map_err(|e| format!("could not serialize feed: {e}"))?;
             println!("{json}");
@@ -182,18 +190,20 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
 pub fn print_help() {
     eprintln!(
-        "Usage:\n  jaycast xweather publish --out <PATH> [--days N]\n  jaycast xweather dump [--days N]\n\nEnvironment:\n  XWEATHER_API_KEY   client_id_client_secret\n\nDefaults:\n  --days {DEFAULT_DAYS}   full local days ending today (America/New_York host local)"
+        "Usage:\n  jaycast xweather publish --out <PATH> [--days N] [--cache PATH]\n  jaycast xweather dump [--days N] [--cache PATH]\n\nEnvironment:\n  XWEATHER_API_KEY   client_id_client_secret\n\nDefaults:\n  --days {DEFAULT_DAYS}   full local days ending today (host local date)\n  --cache  beside --out, else ./{DEFAULT_CACHE_NAME}\n\nPast days are read from the cache when present; today is always fetched."
     );
 }
 
 struct Opts {
     out: Option<PathBuf>,
     days: u32,
+    cache: Option<PathBuf>,
 }
 
 fn parse_opts(mut args: impl Iterator<Item = String>, require_out: bool) -> Result<Opts, String> {
     let mut out = None;
     let mut days = DEFAULT_DAYS;
+    let mut cache = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--out" => {
@@ -216,21 +226,92 @@ fn parse_opts(mut args: impl Iterator<Item = String>, require_out: bool) -> Resu
                     return Err("--days must be at most 31".into());
                 }
             }
+            "--cache" => {
+                let path = args
+                    .next()
+                    .ok_or_else(|| "missing path after --cache".to_string())?;
+                cache = Some(PathBuf::from(path));
+            }
             other => return Err(format!("unexpected argument {other:?}")),
         }
     }
     if require_out && out.is_none() {
         return Err("publish requires --out <PATH>".into());
     }
-    Ok(Opts { out, days })
+    Ok(Opts { out, days, cache })
 }
 
-fn build_feed(days: u32) -> Result<Feed, String> {
+fn default_cache_path(out: Option<&Path>) -> PathBuf {
+    match out.and_then(|p| p.parent()) {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.join(DEFAULT_CACHE_NAME),
+        _ => PathBuf::from(DEFAULT_CACHE_NAME),
+    }
+}
+
+/// station_id → date (YYYY-MM-DD) → day
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct DayCache {
+    schema: u32,
+    stations: BTreeMap<String, BTreeMap<String, DayFeed>>,
+}
+
+impl DayCache {
+    fn load(path: &Path) -> Self {
+        let Ok(raw) = fs::read_to_string(path) else {
+            return Self {
+                schema: CACHE_SCHEMA,
+                stations: BTreeMap::new(),
+            };
+        };
+        match serde_json::from_str::<DayCache>(&raw) {
+            Ok(cache) if cache.schema == CACHE_SCHEMA => cache,
+            _ => Self {
+                schema: CACHE_SCHEMA,
+                stations: BTreeMap::new(),
+            },
+        }
+    }
+
+    fn get(&self, station_id: &str, date: NaiveDate) -> Option<DayFeed> {
+        self.stations
+            .get(station_id)
+            .and_then(|days| days.get(&date.to_string()))
+            .cloned()
+    }
+
+    fn insert(&mut self, station_id: &str, day: DayFeed) {
+        self.stations
+            .entry(station_id.to_string())
+            .or_default()
+            .insert(day.date.clone(), day);
+    }
+
+    fn prune_before(&mut self, keep_from: NaiveDate) {
+        let keep = keep_from.to_string();
+        for days in self.stations.values_mut() {
+            days.retain(|date, _| date.as_str() >= keep.as_str());
+        }
+        self.stations.retain(|_, days| !days.is_empty());
+    }
+
+    fn save(&self, path: &Path) -> Result<(), String> {
+        write_json_atomic(path, self)
+    }
+}
+
+fn build_feed(days: u32, cache_path: &Path) -> Result<Feed, String> {
     let auth = Auth::from_env()?;
     let today = Local::now().date_naive();
     let (day_start, day_end) = day_range(today, days);
     let generated_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     let now_ts = chrono::Utc::now().timestamp();
+
+    let mut cache = DayCache::load(cache_path);
+    let mut cache_dirty = false;
+    eprintln!(
+        "xweather: range {day_start}..={day_end}  cache={}",
+        cache_path.display()
+    );
 
     let mut trails = BTreeMap::new();
     for trail in TRAILS {
@@ -239,8 +320,48 @@ fn build_feed(days: u32) -> Result<Feed, String> {
             let mut day_feeds = Vec::with_capacity(days as usize);
             let mut date = day_start;
             loop {
-                let periods = fetch_archive(&auth, station.id, date)?;
-                day_feeds.push(day_from_periods(date, &periods, now_ts));
+                let day = if date < today {
+                    if let Some(cached) = cache.get(station.id, date) {
+                        eprintln!(
+                            "xweather: cache  {} {}  total={:.2}\"  last_ob={}",
+                            station.id,
+                            date,
+                            cached.day_total_in,
+                            cached.last_ob.as_deref().unwrap_or("-"),
+                        );
+                        cached
+                    } else {
+                        eprintln!("xweather: api    {} {}  (past, uncached)", station.id, date);
+                        let periods = fetch_archive(&auth, station.id, date)?;
+                        let day = day_from_periods(date, &periods, now_ts);
+                        eprintln!(
+                            "xweather: api    {} {}  total={:.2}\"  obs={}  last_ob={}",
+                            station.id,
+                            date,
+                            day.day_total_in,
+                            periods.len(),
+                            day.last_ob.as_deref().unwrap_or("-"),
+                        );
+                        cache.insert(station.id, day.clone());
+                        cache_dirty = true;
+                        day
+                    }
+                } else {
+                    eprintln!("xweather: api    {} {}  (today)", station.id, date);
+                    let periods = fetch_archive(&auth, station.id, date)?;
+                    let day = day_from_periods(date, &periods, now_ts);
+                    eprintln!(
+                        "xweather: api    {} {}  total={:.2}\"  obs={}  last_ob={}  stale={}",
+                        station.id,
+                        date,
+                        day.day_total_in,
+                        periods.len(),
+                        day.last_ob.as_deref().unwrap_or("-"),
+                        day.stale,
+                    );
+                    day
+                };
+                day_feeds.push(day);
                 if date == day_end {
                     break;
                 }
@@ -254,10 +375,16 @@ fn build_feed(days: u32) -> Result<Feed, String> {
                 days: day_feeds,
             });
         }
-        trails.insert(
-            trail.slug.to_string(),
-            TrailFeed { stations },
-        );
+        trails.insert(trail.slug.to_string(), TrailFeed { stations });
+    }
+
+    if cache_dirty {
+        let keep_from = today - chrono::Duration::days(CACHE_RETENTION_DAYS);
+        cache.prune_before(keep_from);
+        cache.save(cache_path)?;
+        eprintln!("xweather: cache written {}", cache_path.display());
+    } else {
+        eprintln!("xweather: cache unchanged {}", cache_path.display());
     }
 
     Ok(Feed {
@@ -389,8 +516,12 @@ fn parse_iso_timestamp(iso: &str) -> Option<i64> {
 }
 
 fn write_atomic(path: &Path, feed: &Feed) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(feed)
-        .map_err(|e| format!("could not serialize feed: {e}"))?;
+    write_json_atomic(path, feed)
+}
+
+fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(value)
+        .map_err(|e| format!("could not serialize {}: {e}", path.display()))?;
     let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
     if let Some(dir) = parent {
         fs::create_dir_all(dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
@@ -490,5 +621,65 @@ mod tests {
                 precip_since_last_ob_in: tip,
             }),
         }
+    }
+
+    #[test]
+    fn cache_returns_inserted_past_day() {
+        let mut cache = DayCache {
+            schema: CACHE_SCHEMA,
+            stations: BTreeMap::new(),
+        };
+        let date = NaiveDate::from_ymd_opt(2026, 7, 18).unwrap();
+        let day = DayFeed {
+            date: date.to_string(),
+            hourly_tips_in: [0.0; 24],
+            day_total_in: 0.5,
+            last_ob: Some("2026-07-18T23:59:00-04:00".into()),
+            stale: true,
+        };
+        cache.insert("MID_E8181", day.clone());
+        assert_eq!(cache.get("MID_E8181", date), Some(day));
+        assert!(cache.get("MID_E8181", date.succ_opt().unwrap()).is_none());
+    }
+
+    #[test]
+    fn cache_prunes_old_days() {
+        let mut cache = DayCache {
+            schema: CACHE_SCHEMA,
+            stations: BTreeMap::new(),
+        };
+        for (date, total) in [
+            ("2026-05-01", 0.1),
+            ("2026-07-10", 0.2),
+            ("2026-07-18", 0.3),
+        ] {
+            cache.insert(
+                "MID_E8181",
+                DayFeed {
+                    date: date.into(),
+                    hourly_tips_in: [0.0; 24],
+                    day_total_in: total,
+                    last_ob: None,
+                    stale: true,
+                },
+            );
+        }
+        cache.prune_before(NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
+        let days = cache.stations.get("MID_E8181").unwrap();
+        assert!(!days.contains_key("2026-05-01"));
+        assert!(days.contains_key("2026-07-10"));
+        assert!(days.contains_key("2026-07-18"));
+    }
+
+    #[test]
+    fn default_cache_sits_beside_out() {
+        assert_eq!(
+            default_cache_path(Some(Path::new("/var/www/rain.json"))),
+            PathBuf::from(format!("/var/www/{DEFAULT_CACHE_NAME}"))
+        );
+        assert_eq!(
+            default_cache_path(None),
+            PathBuf::from(DEFAULT_CACHE_NAME)
+        );
     }
 }

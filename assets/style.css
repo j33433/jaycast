@@ -652,7 +652,7 @@ body {
   outline-offset: -3px;
 }
 
-.day-card > :not(.day-card-select, .rain-wave, .cloud-wave) {
+.day-card > :not(.day-card-select, .rain-wave, .cloud-wave, .rain-bins) {
   position: relative;
   z-index: 2;
   pointer-events: none;
@@ -660,13 +660,18 @@ body {
 
 /* The curves compare morning (left) with afternoon/evening (right). */
 .rain-wave,
-.cloud-wave {
+.cloud-wave,
+.rain-bins {
   position: absolute;
   inset: 0;
   z-index: -1;
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+.rain-wave,
+.cloud-wave {
   filter: blur(2px);
   transform: scale(1.02);
 }
@@ -677,6 +682,17 @@ body {
 
 .cloud-wave path {
   fill: color-mix(in srgb, #9ca3af 16%, transparent);
+}
+
+/* Ground-truth gauge tips (hourly) over the model rain curve. */
+.rain-bins {
+  z-index: 0;
+}
+
+.rain-bins rect {
+  fill: color-mix(in srgb, var(--jay) 42%, transparent);
+  stroke: color-mix(in srgb, var(--jay) 55%, transparent);
+  stroke-width: 0.15;
 }
 
 .day-card:hover,

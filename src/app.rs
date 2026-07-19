@@ -2,6 +2,7 @@ use chrono::{Duration, Local, NaiveDate, TimeZone};
 use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
+use crate::rain_feed::{self, GaugeRain};
 use crate::score::{score_color, score_days, DayForecast, Params};
 use crate::theme::{
     apply_theme, apply_theme_color, detect_os_theme, load_theme_pref, save_theme_pref, Theme,
@@ -28,6 +29,7 @@ pub fn App() -> impl IntoView {
     let grid_lat = RwSignal::new(0.0f64);
     let grid_lon = RwSignal::new(0.0f64);
     let theme = RwSignal::new(load_theme_pref().unwrap_or_else(detect_os_theme));
+    let gauge_rain = RwSignal::new(GaugeRain::default());
 
     let is_first_load = RwSignal::new(true);
 
@@ -50,6 +52,7 @@ pub fn App() -> impl IntoView {
         let first = is_first_load.get_untracked();
         state.set(LoadState::Loading);
         spawn_local(async move {
+            let gauge = rain_feed::fetch_gauge_rain().await;
             match weather::fetch_forecast(m, t).await {
                 Ok((forecast, forecast_at)) => {
                     let today = Local::now().date_naive();
@@ -97,6 +100,7 @@ pub fn App() -> impl IntoView {
                             }
 
                             is_first_load.set(false);
+                            gauge_rain.set(gauge);
                             refreshed_at.set(format_weather_as_of(forecast_at));
                             state.set(LoadState::Ready(scored));
                         }
@@ -205,6 +209,7 @@ pub fn App() -> impl IntoView {
                         grid_lat=grid_lat
                         grid_lon=grid_lon
                         theme=theme
+                        gauge_rain=gauge_rain
                         on_switch=Callback::new(switch_model)
                     />
                 }.into_any(),
@@ -312,6 +317,7 @@ fn ReadyView(
     grid_lat: RwSignal<f64>,
     grid_lon: RwSignal<f64>,
     theme: RwSignal<Theme>,
+    gauge_rain: RwSignal<GaugeRain>,
     on_switch: Callback<WeatherModel>,
 ) -> impl IntoView {
     let days_hero = days.clone();
@@ -330,7 +336,13 @@ fn ReadyView(
             on_switch=on_switch
         />
         <TimelineNav days=days_nav view_start=view_start selected=selected />
-        <Timeline days=days_list view_start=view_start selected=selected trail=trail />
+        <Timeline
+            days=days_list
+            view_start=view_start
+            selected=selected
+            trail=trail
+            gauge_rain=gauge_rain
+        />
         <footer class="footer">
             <p>
                 {move || format!(
@@ -601,6 +613,7 @@ fn Timeline(
     view_start: RwSignal<usize>,
     selected: RwSignal<Option<NaiveDate>>,
     trail: RwSignal<Trail>,
+    gauge_rain: RwSignal<GaugeRain>,
 ) -> impl IntoView {
     view! {
         <div class="timeline" role="list">
@@ -609,6 +622,8 @@ fn Timeline(
                 let max_start = n.saturating_sub(VIEW_DAYS);
                 let start = view_start.get().min(max_start);
                 let end = (start + VIEW_DAYS).min(n);
+                let t = trail.get();
+                let gauge = gauge_rain.get();
                 days[start..end]
                     .iter()
                     .map(|d| {
@@ -624,6 +639,10 @@ fn Timeline(
                         let temp = format!("{:.0}°/{:.0}°", d.temp_max_f, d.temp_min_f);
                         let rain_path = rain_wave_path(&d.precip_3h_in);
                         let cloud_path = cloud_wave_path(&d.cloud_3h_pct);
+                        let gauge_bins = gauge
+                            .hourly(t, date)
+                            .map(|h| rain_gauge_bin_rects(&h))
+                            .unwrap_or_default();
                         let date_s = format_short(date);
                         let tint = day_card_style(d.score, d.am_vs_avg_f, d.pm_vs_avg_f);
                         let detail = d.clone();
@@ -690,6 +709,15 @@ fn Timeline(
                                         focusable="false"
                                     >
                                         <path d=rain_path />
+                                    </svg>
+                                    <svg
+                                        class="rain-bins"
+                                        viewBox="0 0 100 100"
+                                        preserveAspectRatio="none"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                    >
+                                        {gauge_bins}
                                     </svg>
                                     <div class="date">
                                         {date_s}
@@ -841,6 +869,34 @@ fn rain_wave_path(rain_3h_in: &[f64]) -> String {
         100.0 - (inches.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0
     });
     format!("{curve} L 100 100 L 0 100 Z")
+}
+
+/// Hourly gauge tip bars (inches), same vertical scale as the model rain wave.
+fn rain_gauge_bin_rects(hourly_tips_in: &[f64; 24]) -> Vec<AnyView> {
+    const TRACE: f64 = 0.005;
+    let width = 100.0 / 24.0;
+    let gap = 0.25;
+    hourly_tips_in
+        .iter()
+        .enumerate()
+        .filter(|(_, tips)| **tips > TRACE)
+        .map(|(hour, tips)| {
+            let bar_h = (tips.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0;
+            let x = hour as f64 * width + gap * 0.5;
+            let y = 100.0 - bar_h;
+            let w = (width - gap).max(0.4);
+            view! {
+                <rect
+                    x=format!("{x:.2}")
+                    y=format!("{y:.2}")
+                    width=format!("{w:.2}")
+                    height=format!("{bar_h:.2}")
+                    rx="0.4"
+                />
+            }
+            .into_any()
+        })
+        .collect()
 }
 
 fn cloud_wave_path(cloud_3h_pct: &[f64]) -> String {

@@ -300,6 +300,7 @@ cargo run --features cli --bin jaycast -- xweather publish --out /path/to/xweath
 - `--days` defaults to **2** (yesterday + today in host local date; label timezone is `America/New_York`).
 - Stations: Markham `MID_E8181` / `PWS_W4RCT`; Camp Murphy `MID_C8019` / `PWS_JOE4SPEED`.
 - Each day has `hourly_tips_in` (24 floats, inches) = sum of `precipSinceLastObIN` by local hour from `/observations/archive/{id}`.
+- **Cache:** completed past days are stored in `--cache` (default: `.jaycast-xweather-cache.json` beside `--out`, else cwd). Today is always fetched; past days hit the cache after the first pull. Retention 60 days.
 - Install/cron placement is left to the operator.
 
 ## What this is not

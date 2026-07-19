@@ -1,6 +1,7 @@
 //! jaycast - weather-informed MTB trail rideability forecasts
 
 mod app;
+mod rain_feed;
 pub mod score;
 mod theme;
 pub mod trails;
