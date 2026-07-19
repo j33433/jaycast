@@ -301,6 +301,17 @@ cargo run --features cli --bin jaycast -- xweather publish --out /path/to/xweath
 - Stations: Markham `MID_E8181` / `PWS_W4RCT`; Camp Murphy `MID_C8019` / `PWS_JOE4SPEED`; Quiet Waters `PWS_363636363`.
 - Each day has `hourly_tips_in` (24 floats, inches) = sum of `precipSinceLastObIN` by local hour from `/observations/archive/{id}`.
 - **Cache:** completed past days are stored in `--cache` (default: `.jaycast-xweather-cache.json` beside `--out`, else cwd). Today is always fetched; past days hit the cache after the first pull. Retention 60 days.
+- **Rescan** (print-only; does not rewrite the feed table):
+
+  ```bash
+  cargo run --features cli --bin jaycast -- xweather rescan [trail] [--limit 15] [--days 7] [--candidates 12]
+  ```
+
+  Pulls closest PWS + mesonet, rejects blocklisted / no-precip / stuck-zero gauges (vs trailhead `conditions/summary`), ranks survivors by MAE (mean absolute error vs conditions daily totals, inches) then distance. Known bad: `MID_D4511`.
+
+  **Feed vs rescan:** `TRAILS` in `src/xweather/mod.rs` is curated for long-term gauge trust (pairs that agree, known-good MADIS/CWOP). Rescan optimizes a short window against analyzed conditions — a good audit, not automatic truth. Do not adopt a new primary from one run; wait for several wet events and keep a secondary. MAE can favor “looks like the grid” over a correct local tip bucket.
+
+  **When to run:** monthly, after a big multi-day rain week, or when publish shows a feed station stale. Not on every publish cron. Review output → hand-edit `TRAILS` if switching → next `publish`. Keep the blocklist and stuck-zero rejects.
 - Install/cron placement is left to the operator.
 
 ## What this is not
