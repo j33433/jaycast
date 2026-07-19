@@ -474,13 +474,8 @@ body {
   display: block;
 }
 
-.hero-toggle .hero-distance {
-  margin: 0;
-  font-size: 0.7rem;
-  color: var(--text-muted);
+.footer-distance {
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  line-height: 1;
 }
 
 :root[data-theme="light"] .hero .label {

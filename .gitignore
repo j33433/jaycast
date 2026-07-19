@@ -3,5 +3,5 @@
 .DS_Store
 *.swp
 install.sh
-install-weather.sh
+fetch-weather.sh
 .jaycast-xweather-cache.json

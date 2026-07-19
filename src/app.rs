@@ -329,9 +329,6 @@ fn ReadyView(
             days=days_hero
             refreshed_at=refreshed_at
             model=model
-            trail=trail
-            grid_lat=grid_lat
-            grid_lon=grid_lon
             theme=theme
             on_switch=on_switch
         />
@@ -354,6 +351,11 @@ fn ReadyView(
                 "Past and forecast days both use "
                 {move || model.get().label()}
                 "."
+            </p>
+            <p class="footer-distance">
+                {move || {
+                    source_distance_line(trail.get(), grid_lat.get(), grid_lon.get())
+                }}
             </p>
             <p>
                 "Weather via "
@@ -380,9 +382,6 @@ fn Hero(
     days: Vec<DayForecast>,
     refreshed_at: RwSignal<String>,
     model: RwSignal<WeatherModel>,
-    trail: RwSignal<Trail>,
-    grid_lat: RwSignal<f64>,
-    grid_lon: RwSignal<f64>,
     theme: RwSignal<Theme>,
     on_switch: Callback<WeatherModel>,
 ) -> impl IntoView {
@@ -484,27 +483,6 @@ fn Hero(
                             }}
                         </button>
                     </div>
-                    <p class="hero-distance">
-                        {move || {
-                            let lat = grid_lat.get();
-                            let lon = grid_lon.get();
-                            if lat == 0.0 && lon == 0.0 {
-                                return String::new();
-                            }
-                            let km = haversine_km(
-                                trail.get().latitude(),
-                                trail.get().longitude(),
-                                lat,
-                                lon,
-                            );
-                            let mi = km * 0.621371;
-                            if mi < 0.1 {
-                                "forecast at trailhead".to_string()
-                            } else {
-                                format!("forecast {mi:.1} miles away")
-                            }
-                        }}
-                    </p>
                 </div>
             </div>
             {match best {
@@ -950,6 +928,59 @@ fn format_dow(d: NaiveDate) -> String {
 fn is_weekend(d: NaiveDate) -> bool {
     use chrono::Datelike;
     matches!(d.weekday(), chrono::Weekday::Sat | chrono::Weekday::Sun)
+}
+
+/// Footer line: forecast grid distance plus unnamed rain-gauge distances.
+fn source_distance_line(trail: Trail, grid_lat: f64, grid_lon: f64) -> String {
+    let t_lat = trail.latitude();
+    let t_lon = trail.longitude();
+    let mut parts = Vec::new();
+
+    if grid_lat != 0.0 || grid_lon != 0.0 {
+        let mi = haversine_km(t_lat, t_lon, grid_lat, grid_lon) * 0.621_371;
+        if mi < 0.1 {
+            parts.push("Forecast at trailhead".to_string());
+        } else {
+            parts.push(format!("Forecast {mi:.1} miles away"));
+        }
+    }
+
+    let mut gauge_mi: Vec<f64> = trail
+        .rain_gauge_coords()
+        .iter()
+        .map(|(lat, lon)| haversine_km(t_lat, t_lon, *lat, *lon) * 0.621_371)
+        .filter(|mi| mi.is_finite())
+        .collect();
+    gauge_mi.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    // Dedupe near-identical co-located gauges (e.g. Camp Murphy pair).
+    gauge_mi.dedup_by(|a, b| (*a - *b).abs() < 0.05);
+
+    if !gauge_mi.is_empty() {
+        let gauges = match gauge_mi.as_slice() {
+            [one] => {
+                if *one < 0.1 {
+                    "rain gauge at trailhead".to_string()
+                } else {
+                    format!("rain gauge {one:.1} miles away")
+                }
+            }
+            many => {
+                let list = many
+                    .iter()
+                    .map(|mi| format!("{mi:.1}"))
+                    .collect::<Vec<_>>()
+                    .join(" and ");
+                format!("rain gauges {list} miles away")
+            }
+        };
+        parts.push(gauges);
+    }
+
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("{}.", parts.join(" · "))
+    }
 }
 
 fn haversine_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
