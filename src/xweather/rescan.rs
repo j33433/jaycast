@@ -11,11 +11,64 @@ use super::{http_get_json, Auth, BASE_URL, TRAILS};
 const DEFAULT_CLOSEST_LIMIT: u32 = 15;
 const DEFAULT_QC_DAYS: u32 = 7;
 const DEFAULT_QC_CANDIDATES: usize = 12;
+/// Hard reject beyond this (except forced feed stations still get QC).
 const MAX_DISTANCE_MI: f64 = 15.0;
+/// Eligible for normal primary/secondary recommendation.
+const PRIMARY_MAX_MI: f64 = 5.0;
+/// Emergency fallback only — never auto-recommended as primary.
+const BACKUP_MAX_MI: f64 = 10.0;
 const TRACE_IN: f64 = 0.01;
 const REF_WET_FOR_STUCK: usize = 2;
 /// Known bad rain meters (always reject).
 const BLOCKLIST: &[&str] = &["MID_D4511"];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NetworkKind {
+    Pws,
+    Madis,
+    Other,
+}
+
+impl NetworkKind {
+    fn of(id: &str) -> Self {
+        if id.starts_with("PWS_") {
+            Self::Pws
+        } else if id.starts_with("MID_") {
+            Self::Madis
+        } else {
+            Self::Other
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Pws => "pws",
+            Self::Madis => "madis",
+            Self::Other => "other",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum DistanceTier {
+    Primary,
+    Backup,
+    Regional,
+}
+
+impl DistanceTier {
+    fn of(distance_mi: f64) -> Self {
+        let d = nan_last_distance(distance_mi);
+        if d <= PRIMARY_MAX_MI {
+            Self::Primary
+        } else if d <= BACKUP_MAX_MI {
+            Self::Backup
+        } else {
+            Self::Regional
+        }
+    }
+
+}
 
 #[derive(Debug, Deserialize)]
 struct ClosestResponse {
@@ -185,7 +238,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
 pub fn print_help() {
     eprintln!(
-        "Usage:\n  jaycast xweather rescan [camp-murphy|markham|quiet-waters] [--limit N] [--days N] [--candidates N]\n\nFinds nearby PWS/mesonet stations, rejects bad/missing rain meters, ranks survivors.\nDoes not change the feed station table (print-only).\n\nDefaults: --limit {DEFAULT_CLOSEST_LIMIT}  --days {DEFAULT_QC_DAYS}  --candidates {DEFAULT_QC_CANDIDATES}"
+        "Usage:\n  jaycast xweather rescan [camp-murphy|markham|quiet-waters] [--limit N] [--days N] [--candidates N]\n\nFinds nearby PWS/mesonet stations, rejects bad/missing rain meters, ranks by distance tier.\nPrimary ≤{PRIMARY_MAX_MI:.0} mi, backup ≤{BACKUP_MAX_MI:.0} mi; conditions MAE is only a tie-break.\nDoes not change the feed station table (print-only).\n\nDefaults: --limit {DEFAULT_CLOSEST_LIMIT}  --days {DEFAULT_QC_DAYS}  --candidates {DEFAULT_QC_CANDIDATES}"
     );
 }
 
@@ -259,20 +312,41 @@ fn rescan_trail(
         }
     }
 
-    // Always include current feed stations even if outside closest page.
-    for (id, _) in &current {
-        if by_id.contains_key(*id) {
+    // Always include current feed stations even if outside closest / offline latest.
+    let feed_ids: BTreeSet<String> = current
+        .iter()
+        .map(|(id, _)| (*id).to_string())
+        .collect();
+    for id in &feed_ids {
+        if by_id.contains_key(id) {
             continue;
         }
-        if let Ok(Some(c)) = fetch_one_meta(auth, id, lat, lon) {
-            by_id.insert(c.id.clone(), c);
+        match fetch_one_meta(auth, id, lat, lon) {
+            Ok(Some(c)) => {
+                by_id.insert(c.id.clone(), c);
+            }
+            Ok(None) | Err(_) => {
+                // Still contest them via summary QC; distance filled from summary if possible.
+                eprintln!("xweather rescan: feed station {id} has no latest ob; forcing into contest");
+                by_id.insert(
+                    id.clone(),
+                    Candidate {
+                        id: id.clone(),
+                        distance_mi: f64::NAN, // filled after summary if needed
+                        place: String::from("(feed)"),
+                        trust: None,
+                        last_ob: None,
+                        has_live_precip_field: true, // let summary decide precip health
+                    },
+                );
+            }
         }
     }
 
     let mut candidates: Vec<Candidate> = by_id.into_values().collect();
     candidates.sort_by(|a, b| {
-        a.distance_mi
-            .partial_cmp(&b.distance_mi)
+        nan_last_distance(a.distance_mi)
+            .partial_cmp(&nan_last_distance(b.distance_mi))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
@@ -284,15 +358,29 @@ fn rescan_trail(
             rejected.push((c, RejectReason::Blocklist));
             continue;
         }
-        if c.distance_mi > MAX_DISTANCE_MI {
+        // Feed stations always QC even if listed beyond the usual radius.
+        let is_feed = feed_ids.contains(&c.id);
+        if !is_feed && c.distance_mi > MAX_DISTANCE_MI {
             rejected.push((c, RejectReason::TooFar));
             continue;
         }
         to_qc.push(c);
     }
 
-    // QC nearest first, cap API calls.
-    to_qc.truncate(qc_candidates);
+    // Always QC every current feed station; fill remaining slots by distance.
+    let mut guaranteed: Vec<Candidate> = Vec::new();
+    let mut others: Vec<Candidate> = Vec::new();
+    for c in to_qc {
+        if feed_ids.contains(&c.id) {
+            guaranteed.push(c);
+        } else {
+            others.push(c);
+        }
+    }
+    let other_slots = qc_candidates.saturating_sub(guaranteed.len());
+    others.truncate(other_slots);
+    let mut to_qc = guaranteed;
+    to_qc.extend(others);
 
     let mut ranked: Vec<RankedStation> = Vec::new();
     for c in to_qc {
@@ -304,20 +392,21 @@ fn rescan_trail(
         }
     }
 
-    ranked.sort_by(|a, b| {
-        // Prefer lower MAE when both have it, then closer, then more wet days.
-        let mae_a = a.mae_in.unwrap_or(999.0);
-        let mae_b = b.mae_in.unwrap_or(999.0);
-        mae_a
-            .partial_cmp(&mae_b)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(
-                a.distance_mi
-                    .partial_cmp(&b.distance_mi)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-            )
-            .then(b.wet_days.cmp(&a.wet_days))
-    });
+    // Peer wet-day agreement among survivors within backup radius (not the grid).
+    let peer_scores = peer_wet_agreement(&ranked);
+
+    ranked.sort_by(|a, b| compare_stations(a, b, &peer_scores));
+
+    let mut primary_ok = Vec::new();
+    let mut backup_ok = Vec::new();
+    let mut regional_ok = Vec::new();
+    for r in &ranked {
+        match DistanceTier::of(r.distance_mi) {
+            DistanceTier::Primary => primary_ok.push(r),
+            DistanceTier::Backup => backup_ok.push(r),
+            DistanceTier::Regional => regional_ok.push(r),
+        }
+    }
 
     println!();
     println!("REJECTED ({}):", rejected.len());
@@ -325,92 +414,265 @@ fn rescan_trail(
         println!("  (none)");
     } else {
         rejected.sort_by(|a, b| {
-            a.0.distance_mi
-                .partial_cmp(&b.0.distance_mi)
+            nan_last_distance(a.0.distance_mi)
+                .partial_cmp(&nan_last_distance(b.0.distance_mi))
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         for (c, reason) in &rejected {
             println!(
-                "  {:20} {:5.1} mi  {}  — {}",
+                "  {:20} {:>6}  {}  — {}",
                 c.id,
-                c.distance_mi,
+                fmt_mi(c.distance_mi),
                 c.place,
                 reason.label()
             );
         }
     }
 
-    println!();
-    println!("OK ranked ({}):", ranked.len());
-    if ranked.is_empty() {
-        println!("  (none with working rain)");
-    } else {
-        println!(
-            "  {:3} {:20} {:>6}  {:>7}  {:>8}  {:>6}  {}",
-            "#", "id", "mi", "wet", "mae", "max", "place"
+    print_tier_table(
+        &format!("PRIMARY ELIGIBLE (≤{PRIMARY_MAX_MI:.0} mi)"),
+        &primary_ok,
+        &peer_scores,
+    );
+    print_tier_table(
+        &format!("BACKUPS ({PRIMARY_MAX_MI:.0}–{BACKUP_MAX_MI:.0} mi, not for normal primary)"),
+        &backup_ok,
+        &peer_scores,
+    );
+    if !regional_ok.is_empty() {
+        print_tier_table(
+            &format!("REGIONAL (>{BACKUP_MAX_MI:.0} mi, sanity only)"),
+            &regional_ok,
+            &peer_scores,
         );
-        for (i, r) in ranked.iter().enumerate() {
-            let mae = r
-                .mae_in
-                .map(|m| format!("{m:.2}\""))
-                .unwrap_or_else(|| "-".into());
-            let trust = r
-                .trust
-                .map(|t| format!("{t:.0}"))
-                .unwrap_or_else(|| "-".into());
-            println!(
-                "  {:3} {:20} {:5.1}  {:>3}/{:<3}  {:>8}  {:5.2}\"  {}  trust={}",
-                i + 1,
-                r.id,
-                r.distance_mi,
-                r.wet_days,
-                r.ref_wet_days,
-                mae,
-                r.max_day_in,
-                r.place,
-                trust
-            );
-            print!(
-                "       last_ob={}  days:",
-                r.last_ob.as_deref().unwrap_or("-")
-            );
-            for (ymd, v) in &r.day_totals {
-                match v {
-                    Some(x) => print!(" {ymd}={x:.2}\""),
-                    None => print!(" {ymd}=null"),
-                }
-            }
-            println!();
-        }
     }
 
     println!();
-    if ranked.is_empty() {
-        println!("recommend: (no usable rain stations)");
-    } else {
-        let primary = &ranked[0];
-        let secondary = ranked.get(1);
-        print!("recommend: primary={} ({:.1} mi)", primary.id, primary.distance_mi);
-        if let Some(s) = secondary {
-            print!(
-                "  secondary={} ({:.1} mi)",
-                s.id, s.distance_mi
-            );
-        }
-        println!();
-        // Note if feed differs.
-        let feed_ids: BTreeSet<&str> = current.iter().map(|(id, _)| *id).collect();
-        let rec_ids: BTreeSet<&str> = std::iter::once(primary.id.as_str())
-            .chain(secondary.map(|s| s.id.as_str()))
-            .collect();
-        if feed_ids != rec_ids {
-            println!("note: differs from current feed station set — update TRAILS in src/xweather/mod.rs if you want to switch.");
-        } else {
-            println!("note: matches current feed set (order may differ).");
-        }
-    }
+    print_recommendation(&primary_ok, &backup_ok, &current);
 
     Ok(())
+}
+
+fn compare_stations(
+    a: &RankedStation,
+    b: &RankedStation,
+    peer_scores: &BTreeMap<String, f64>,
+) -> std::cmp::Ordering {
+    // Distance tier first (primary before backup before regional).
+    DistanceTier::of(a.distance_mi)
+        .cmp(&DistanceTier::of(b.distance_mi))
+        .then(
+            nan_last_distance(a.distance_mi)
+                .partial_cmp(&nan_last_distance(b.distance_mi))
+                .unwrap_or(std::cmp::Ordering::Equal),
+        )
+        .then_with(|| {
+            let pa = peer_scores.get(&a.id).copied().unwrap_or(0.0);
+            let pb = peer_scores.get(&b.id).copied().unwrap_or(0.0);
+            pb.partial_cmp(&pa).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .then(b.wet_days.cmp(&a.wet_days))
+        .then_with(|| {
+            // Conditions MAE is only a weak tie-break (not the main score).
+            let mae_a = a.mae_in.unwrap_or(999.0);
+            let mae_b = b.mae_in.unwrap_or(999.0);
+            mae_a
+                .partial_cmp(&mae_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .then_with(|| {
+            let ta = a.trust.unwrap_or(0.0);
+            let tb = b.trust.unwrap_or(0.0);
+            tb.partial_cmp(&ta).unwrap_or(std::cmp::Ordering::Equal)
+        })
+}
+
+/// Fraction of days where this station's wet/dry matches the peer majority
+/// among other OK gauges within BACKUP_MAX_MI. Higher is better.
+fn peer_wet_agreement(stations: &[RankedStation]) -> BTreeMap<String, f64> {
+    let peers: Vec<&RankedStation> = stations
+        .iter()
+        .filter(|s| nan_last_distance(s.distance_mi) <= BACKUP_MAX_MI)
+        .collect();
+    let mut out = BTreeMap::new();
+    if peers.len() < 2 {
+        return out;
+    }
+
+    // Collect union of dates.
+    let mut dates: BTreeSet<String> = BTreeSet::new();
+    for s in &peers {
+        for (ymd, _) in &s.day_totals {
+            dates.insert(ymd.clone());
+        }
+    }
+
+    for s in &peers {
+        let mut agree = 0usize;
+        let mut compared = 0usize;
+        let mine: BTreeMap<&str, bool> = s
+            .day_totals
+            .iter()
+            .filter_map(|(ymd, v)| v.map(|x| (ymd.as_str(), x >= TRACE_IN)))
+            .collect();
+        for ymd in &dates {
+            let Some(&my_wet) = mine.get(ymd.as_str()) else {
+                continue;
+            };
+            let mut wet_votes = 0usize;
+            let mut dry_votes = 0usize;
+            for other in &peers {
+                if other.id == s.id {
+                    continue;
+                }
+                if let Some((_, Some(v))) = other.day_totals.iter().find(|(d, _)| d == ymd) {
+                    if *v >= TRACE_IN {
+                        wet_votes += 1;
+                    } else {
+                        dry_votes += 1;
+                    }
+                }
+            }
+            if wet_votes + dry_votes == 0 {
+                continue;
+            }
+            let peer_wet = wet_votes >= dry_votes;
+            compared += 1;
+            if my_wet == peer_wet {
+                agree += 1;
+            }
+        }
+        if compared > 0 {
+            out.insert(s.id.clone(), agree as f64 / compared as f64);
+        }
+    }
+    out
+}
+
+fn print_tier_table(
+    title: &str,
+    rows: &[&RankedStation],
+    peer_scores: &BTreeMap<String, f64>,
+) {
+    println!();
+    println!("{title} ({}):", rows.len());
+    if rows.is_empty() {
+        println!("  (none)");
+        return;
+    }
+    println!(
+        "  {:3} {:20} {:>6}  {:>5}  {:>7}  {:>5}  {:>5}  {:>6}  {:>5}  {}",
+        "#", "id", "mi", "net", "wet", "peer", "max", "mae", "trust", "place"
+    );
+    for (i, r) in rows.iter().enumerate() {
+        let mae = r
+            .mae_in
+            .map(|m| format!("{m:.2}\""))
+            .unwrap_or_else(|| "-".into());
+        let trust = r
+            .trust
+            .map(|t| format!("{t:.0}"))
+            .unwrap_or_else(|| "-".into());
+        let peer = peer_scores
+            .get(&r.id)
+            .map(|p| format!("{:.0}%", p * 100.0))
+            .unwrap_or_else(|| "-".into());
+        println!(
+            "  {:3} {:20} {:>6}  {:>5}  {:>3}/{:<3}  {:>5}  {:4.2}\"  {:>6}  {:>5}  {}",
+            i + 1,
+            r.id,
+            fmt_mi(r.distance_mi),
+            NetworkKind::of(&r.id).label(),
+            r.wet_days,
+            r.ref_wet_days,
+            peer,
+            r.max_day_in,
+            mae,
+            trust,
+            r.place
+        );
+        print!(
+            "       last_ob={}  days:",
+            r.last_ob.as_deref().unwrap_or("-")
+        );
+        for (ymd, v) in &r.day_totals {
+            match v {
+                Some(x) => print!(" {ymd}={x:.2}\""),
+                None => print!(" {ymd}=null"),
+            }
+        }
+        println!();
+    }
+}
+
+fn print_recommendation(
+    primary_ok: &[&RankedStation],
+    backup_ok: &[&RankedStation],
+    current: &[(&str, &str)],
+) {
+    if primary_ok.is_empty() {
+        println!("recommend: (no primary within {PRIMARY_MAX_MI:.0} mi)");
+        if let Some(b) = backup_ok.first() {
+            println!(
+                "fallback only: {} ({}) — backup tier, not a normal feed primary",
+                b.id,
+                fmt_mi(b.distance_mi)
+            );
+        }
+        return;
+    }
+
+    let primary = primary_ok[0];
+    // Prefer a secondary with a different network (PWS vs MADIS) when possible.
+    let primary_net = NetworkKind::of(&primary.id);
+    let secondary = primary_ok
+        .iter()
+        .skip(1)
+        .find(|s| NetworkKind::of(&s.id) != primary_net)
+        .copied()
+        .or_else(|| primary_ok.get(1).copied());
+
+    print!(
+        "recommend: primary={} ({}, {})",
+        primary.id,
+        fmt_mi(primary.distance_mi),
+        NetworkKind::of(&primary.id).label()
+    );
+    if let Some(s) = secondary {
+        print!(
+            "  secondary={} ({}, {})",
+            s.id,
+            fmt_mi(s.distance_mi),
+            NetworkKind::of(&s.id).label()
+        );
+    }
+    println!();
+
+    let feed_ids: BTreeSet<&str> = current.iter().map(|(id, _)| *id).collect();
+    let rec_ids: BTreeSet<&str> = std::iter::once(primary.id.as_str())
+        .chain(secondary.map(|s| s.id.as_str()))
+        .collect();
+    if feed_ids != rec_ids {
+        println!(
+            "note: differs from current feed — update TRAILS in src/xweather/mod.rs only after multi-event review."
+        );
+    } else {
+        println!("note: matches current feed set (order may differ).");
+    }
+    if !backup_ok.is_empty() {
+        println!(
+            "note: {} backup-tier station(s) listed above are not recommended as primary.",
+            backup_ok.len()
+        );
+    }
+}
+
+fn fmt_mi(distance_mi: f64) -> String {
+    if distance_mi.is_finite() {
+        format!("{distance_mi:.1} mi")
+    } else {
+        "? mi".into()
+    }
 }
 
 fn evaluate_station(
@@ -566,29 +828,122 @@ fn fetch_closest(
     Ok(out)
 }
 
-fn fetch_one_meta(auth: &Auth, id: &str, trail_lat: f64, trail_lon: f64) -> Result<Option<Candidate>, String> {
+fn fetch_one_meta(
+    auth: &Auth,
+    id: &str,
+    trail_lat: f64,
+    trail_lon: f64,
+) -> Result<Option<Candidate>, String> {
+    // Prefer latest obs; fall back to summary when the station is temporarily offline
+    // (success + warn_no_data + response:[]), which is common for MID_C8019-class gauges.
+    if let Some(c) = fetch_one_meta_latest(auth, id, trail_lat, trail_lon)? {
+        return Ok(Some(c));
+    }
+    fetch_one_meta_from_summary(auth, id, trail_lat, trail_lon)
+}
+
+fn fetch_one_meta_latest(
+    auth: &Auth,
+    id: &str,
+    trail_lat: f64,
+    trail_lon: f64,
+) -> Result<Option<Candidate>, String> {
     let url = format!("{BASE_URL}/observations/{id}?{}", auth.query());
     let body = match http_get_json(&url, id) {
         Ok(b) => b,
         Err(_) => return Ok(None),
     };
-    #[derive(Deserialize)]
-    struct One {
-        response: Option<ClosestStation>,
-        error: Option<super::ApiError>,
-    }
-    let parsed: One = serde_json::from_str(&body).map_err(|e| e.to_string())?;
-    if parsed.error.is_some() {
+    let value: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+    if is_no_data_error(value.get("error")) {
         return Ok(None);
     }
-    let Some(s) = parsed.response else {
+    let response = value.get("response");
+    let station_val = match response {
+        Some(serde_json::Value::Object(_)) => response.cloned(),
+        Some(serde_json::Value::Array(items)) => items.first().cloned(),
+        _ => None,
+    };
+    let Some(station_val) = station_val else {
         return Ok(None);
     };
+    let s: ClosestStation = match serde_json::from_value(station_val) {
+        Ok(s) => s,
+        Err(_) => return Ok(None),
+    };
+    Ok(Some(candidate_from_closest(s, id, trail_lat, trail_lon)))
+}
+
+fn fetch_one_meta_from_summary(
+    auth: &Auth,
+    id: &str,
+    trail_lat: f64,
+    trail_lon: f64,
+) -> Result<Option<Candidate>, String> {
+    let url = format!(
+        "{BASE_URL}/observations/summary/{id}?from=-2days&to=now&plimit=1&{}",
+        auth.query()
+    );
+    let body = match http_get_json(&url, &format!("summary-meta/{id}")) {
+        Ok(b) => b,
+        Err(_) => return Ok(None),
+    };
+    let value: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+    if is_no_data_error(value.get("error"))
+        && value.get("success") == Some(&serde_json::Value::Bool(false))
+    {
+        return Ok(None);
+    }
+    let obj = match value.get("response") {
+        Some(serde_json::Value::Object(o)) => Some(o),
+        Some(serde_json::Value::Array(items)) => items.first().and_then(|v| v.as_object()),
+        _ => None,
+    };
+    let Some(obj) = obj else {
+        return Ok(None);
+    };
+    let lat_s = obj
+        .get("loc")
+        .and_then(|l| l.get("lat"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(trail_lat);
+    let lon_s = obj
+        .get("loc")
+        .and_then(|l| l.get("long"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(trail_lon);
+    let place = obj
+        .get("place")
+        .and_then(|p| p.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Ok(Some(Candidate {
+        id: id.to_string(),
+        distance_mi: haversine_mi(trail_lat, trail_lon, lat_s, lon_s),
+        place,
+        trust: None,
+        last_ob: None,
+        has_live_precip_field: true,
+    }))
+}
+
+fn candidate_from_closest(
+    s: ClosestStation,
+    fallback_id: &str,
+    trail_lat: f64,
+    trail_lon: f64,
+) -> Candidate {
     let lat_s = s.loc.as_ref().and_then(|l| l.lat).unwrap_or(trail_lat);
     let lon_s = s.loc.as_ref().and_then(|l| l.long).unwrap_or(trail_lon);
     let ob = s.ob.as_ref();
-    Ok(Some(Candidate {
-        id: s.id.unwrap_or_else(|| id.to_string()),
+    Candidate {
+        id: s.id.unwrap_or_else(|| fallback_id.to_string()),
         distance_mi: haversine_mi(trail_lat, trail_lon, lat_s, lon_s),
         place: s
             .place
@@ -604,7 +959,30 @@ fn fetch_one_meta(auth: &Auth, id: &str, trail_lat: f64, trail_lon: f64) -> Resu
                     || o.precip_since_last_ob_in.is_some()
             })
             .unwrap_or(false),
-    }))
+    }
+}
+
+fn is_no_data_error(error: Option<&serde_json::Value>) -> bool {
+    let Some(err) = error.filter(|e| !e.is_null()) else {
+        return false;
+    };
+    let code = err
+        .get("code")
+        .and_then(|c| c.as_str())
+        .unwrap_or_default();
+    let desc = err
+        .get("description")
+        .and_then(|d| d.as_str())
+        .unwrap_or_default();
+    code == "warn_no_data" || desc.to_ascii_lowercase().contains("no results")
+}
+
+fn nan_last_distance(d: f64) -> f64 {
+    if d.is_finite() {
+        d
+    } else {
+        f64::MAX
+    }
 }
 
 fn fetch_station_daily(
@@ -786,6 +1164,56 @@ mod tests {
         // Unit-level: RejectReason label is stable
         let r = RejectReason::StuckZero { ref_wet: 3 };
         assert!(r.label().contains("stuck"));
+    }
+
+    #[test]
+    fn distance_tiers_split_at_five_and_ten() {
+        assert_eq!(DistanceTier::of(3.2), DistanceTier::Primary);
+        assert_eq!(DistanceTier::of(5.0), DistanceTier::Primary);
+        assert_eq!(DistanceTier::of(5.1), DistanceTier::Backup);
+        assert_eq!(DistanceTier::of(7.5), DistanceTier::Backup);
+        assert_eq!(DistanceTier::of(10.0), DistanceTier::Backup);
+        assert_eq!(DistanceTier::of(10.1), DistanceTier::Regional);
+    }
+
+    #[test]
+    fn network_kind_from_id_prefix() {
+        assert_eq!(NetworkKind::of("PWS_W4RCT"), NetworkKind::Pws);
+        assert_eq!(NetworkKind::of("MID_C8019"), NetworkKind::Madis);
+        assert_eq!(NetworkKind::of("KFXE"), NetworkKind::Other);
+    }
+
+    #[test]
+    fn closer_beats_better_mae_within_primary_tier() {
+        let near = RankedStation {
+            id: "NEAR".into(),
+            distance_mi: 1.7,
+            place: String::new(),
+            trust: Some(100.0),
+            last_ob: None,
+            wet_days: 3,
+            ref_wet_days: 6,
+            mae_in: Some(0.20),
+            max_day_in: 0.5,
+            day_totals: vec![],
+        };
+        let far = RankedStation {
+            id: "FAR".into(),
+            distance_mi: 3.7,
+            place: String::new(),
+            trust: Some(100.0),
+            last_ob: None,
+            wet_days: 4,
+            ref_wet_days: 6,
+            mae_in: Some(0.08),
+            max_day_in: 0.5,
+            day_totals: vec![],
+        };
+        let peers = BTreeMap::new();
+        assert_eq!(
+            compare_stations(&near, &far, &peers),
+            std::cmp::Ordering::Less
+        );
     }
 
     #[test]

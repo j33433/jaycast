@@ -307,9 +307,9 @@ cargo run --features cli --bin jaycast -- xweather publish --out /path/to/xweath
   cargo run --features cli --bin jaycast -- xweather rescan [trail] [--limit 15] [--days 7] [--candidates 12]
   ```
 
-  Pulls closest PWS + mesonet, rejects blocklisted / no-precip / stuck-zero gauges (vs trailhead `conditions/summary`), ranks survivors by MAE (mean absolute error vs conditions daily totals, inches) then distance. Known bad: `MID_D4511`.
+  Pulls closest PWS + mesonet, rejects blocklisted / no-precip / stuck-zero gauges (vs trailhead `conditions/summary`). Ranks by **distance tier** (primary ≤5 mi, backup 5–10 mi), then distance, peer wet-day agreement, wet days; conditions MAE is only a weak tie-break. Current feed stations are always included in the contest. Known bad: `MID_D4511`.
 
-  **Feed vs rescan:** `TRAILS` in `src/xweather/mod.rs` is curated for long-term gauge trust (pairs that agree, known-good MADIS/CWOP). Rescan optimizes a short window against analyzed conditions — a good audit, not automatic truth. Do not adopt a new primary from one run; wait for several wet events and keep a secondary. MAE can favor “looks like the grid” over a correct local tip bucket.
+  **Feed vs rescan:** `TRAILS` in `src/xweather/mod.rs` is curated for long-term gauge trust (pairs that agree, known-good MADIS/CWOP). Rescan is an audit, not automatic truth. Do not adopt a new primary from one run; wait for several wet events and keep a secondary. Backup-tier stations (e.g. 7+ mi) are never recommended as normal primaries.
 
   **When to run:** monthly, after a big multi-day rain week, or when publish shows a feed station stale. Not on every publish cron. Review output → hand-edit `TRAILS` if switching → next `publish`. Keep the blocklist and stuck-zero rejects.
 - Install/cron placement is left to the operator.
