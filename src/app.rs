@@ -128,24 +128,36 @@ pub fn App() -> impl IntoView {
         if model.get_untracked() == new_model {
             return;
         }
-        weather::save_model_pref(new_model);
-        model.set(new_model);
-        load();
+        spawn_local(async move {
+            gloo_timers::future::TimeoutFuture::new(0).await;
+            weather::save_model_pref(new_model);
+            model.set(new_model);
+            load();
+        });
     };
 
     let switch_trail = move |new_trail: Trail| {
-        if trail.get_untracked() == new_trail {
+        spawn_local(async move {
+            // Yield past the DOM event before changing signals that unmount its target.
+            gloo_timers::future::TimeoutFuture::new(0).await;
+            if trail.get_untracked() == new_trail {
+                location_dialog_open.set(false);
+                return;
+            }
+
+            // Dispose the dialog's reactive owner before changing `trail`. Otherwise
+            // its selected-option class can be queued, then invoked after disposal.
             location_dialog_open.set(false);
-            return;
-        }
-        trails::save_trail_pref(new_trail);
-        trails::update_trail_url(new_trail);
-        trail.set(new_trail);
-        selected.set(None);
-        view_start.set(0);
-        is_first_load.set(true);
-        location_dialog_open.set(false);
-        load();
+            gloo_timers::future::TimeoutFuture::new(0).await;
+
+            trails::save_trail_pref(new_trail);
+            trails::update_trail_url(new_trail);
+            trail.set(new_trail);
+            selected.set(None);
+            view_start.set(0);
+            is_first_load.set(true);
+            load();
+        });
     };
 
     view! {
@@ -195,7 +207,10 @@ pub fn App() -> impl IntoView {
                 LoadState::Error(msg) => view! {
                     <ErrorView message=msg on_retry=Callback::new(move |_| {
                         weather::clear_cache_for_trail(model.get_untracked(), trail.get_untracked());
-                        load();
+                        spawn_local(async move {
+                            gloo_timers::future::TimeoutFuture::new(0).await;
+                            load();
+                        });
                     }) />
                 }.into_any(),
                 LoadState::Ready(days) => view! {
@@ -254,17 +269,24 @@ fn LocationDialog(
                                 let name = trail.name();
                                 let location = trail.location();
                                 let icon_src = trail.icon_src();
+                                // This dialog closes when a trail is chosen, so the class
+                                // must not subscribe to `selected`: a queued class update
+                                // could otherwise outlive the dialog's reactive owner.
+                                let class = if selected.get_untracked() == trail {
+                                    "location-option selected"
+                                } else {
+                                    "location-option"
+                                };
                                 view! {
                                     <button
                                         type="button"
-                                        class=move || {
-                                            if selected.get() == trail {
-                                                "location-option selected"
-                                            } else {
-                                                "location-option"
-                                            }
+                                        class=class
+                                        on:click=move |event| {
+                                            // Keep the same click from reaching the dialog
+                                            // backdrop while the trail change is deferred.
+                                            event.stop_propagation();
+                                            on_change.run(trail);
                                         }
-                                        on:click=move |_| on_change.run(trail)
                                     >
                                         <img class="location-icon" src=icon_src alt=""/>
                                         <span class="location-option-copy">
