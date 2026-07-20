@@ -108,17 +108,6 @@ pub struct DayFeed {
 }
 
 #[derive(Debug, Deserialize)]
-struct ArchiveResponse {
-    response: Option<ArchiveBody>,
-    error: Option<ApiError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ArchiveBody {
-    periods: Option<Vec<ArchivePeriod>>,
-}
-
-#[derive(Debug, Deserialize)]
 struct ArchivePeriod {
     ob: Option<Observation>,
 }
@@ -445,18 +434,55 @@ fn fetch_archive(
         auth.query()
     );
     let body = http_get_json(&url, station_id)?;
-    let parsed: ArchiveResponse = serde_json::from_str(&body)
+    let value: serde_json::Value = serde_json::from_str(&body)
         .map_err(|e| format!("{station_id} archive for {date} parse error: {e}"))?;
-    if let Some(err) = parsed.error {
+
+    // Today can return success + warn_no_data + response:[] before the first obs.
+    if let Some(err) = value.get("error").filter(|e| !e.is_null()) {
+        let code = err
+            .get("code")
+            .and_then(|c| c.as_str())
+            .unwrap_or_default();
         let desc = err
-            .description
-            .unwrap_or_else(|| format!("{:?}", err.code));
-        return Err(format!("{station_id} archive for {date}: {desc}"));
+            .get("description")
+            .and_then(|d| d.as_str())
+            .unwrap_or_default();
+        let no_data = code == "warn_no_data"
+            || desc.to_ascii_lowercase().contains("no results");
+        if no_data {
+            return Ok(Vec::new());
+        }
+        if value.get("success") == Some(&serde_json::Value::Bool(false)) {
+            let detail = if desc.is_empty() {
+                code.to_string()
+            } else {
+                desc.to_string()
+            };
+            return Err(format!("{station_id} archive for {date}: {detail}"));
+        }
     }
-    Ok(parsed
-        .response
-        .and_then(|r| r.periods)
-        .unwrap_or_default())
+
+    Ok(archive_periods(value.get("response")))
+}
+
+/// Xweather archive `response` is normally an object with `periods`.
+/// Empty results arrive as `[]`.
+fn archive_periods(response: Option<&serde_json::Value>) -> Vec<ArchivePeriod> {
+    let Some(response) = response else {
+        return Vec::new();
+    };
+    match response {
+        serde_json::Value::Array(items) if items.is_empty() => Vec::new(),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .flat_map(|item| archive_periods(Some(item)))
+            .collect(),
+        serde_json::Value::Object(_) => response
+            .get("periods")
+            .and_then(|p| serde_json::from_value::<Vec<ArchivePeriod>>(p.clone()).ok())
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
 }
 
 fn day_from_periods(date: NaiveDate, periods: &[ArchivePeriod], now_ts: i64) -> DayFeed {
@@ -690,6 +716,28 @@ mod tests {
         assert_eq!(
             default_cache_path(None),
             PathBuf::from(DEFAULT_CACHE_NAME)
+        );
+    }
+
+    #[test]
+    fn archive_periods_accepts_empty_array() {
+        let empty = serde_json::json!([]);
+        assert!(archive_periods(Some(&empty)).is_empty());
+        assert!(archive_periods(None).is_empty());
+    }
+
+    #[test]
+    fn archive_periods_reads_object_body() {
+        let body = serde_json::json!({
+            "periods": [
+                { "ob": { "dateTimeISO": "2026-07-19T12:00:00-04:00", "precipSinceLastObIN": 0.1 } }
+            ]
+        });
+        let periods = archive_periods(Some(&body));
+        assert_eq!(periods.len(), 1);
+        assert_eq!(
+            periods[0].ob.as_ref().unwrap().precip_since_last_ob_in,
+            Some(0.1)
         );
     }
 }
