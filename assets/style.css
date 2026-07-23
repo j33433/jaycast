@@ -980,6 +980,10 @@ body {
   text-decoration: underline;
 }
 
+.footer-gauge-stale {
+  color: var(--warn);
+}
+
 .footer-controls {
   display: flex;
   flex-wrap: wrap;

@@ -287,7 +287,7 @@ Open-Meteo API response types and day-window extraction (302 lines).
 
 ### `src/rain_feed.rs`
 
-Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max tip per hour across stations per trail/day. Used by day cards to draw blue hourly bins over the model rain wave. Missing feed is non-fatal (no bins).
+Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max tip per hour across stations per trail/day. Unusable when every station's today day is `stale` (footer warning; no overlay or scoring blend). When usable, past completed hours replace model precip before scoring; today uses only non-stale stations. Day cards draw blue gauge curve over the model rain wave when usable.
 
 ### `src/xweather/mod.rs`
 

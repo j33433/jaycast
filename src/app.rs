@@ -1,4 +1,4 @@
-use chrono::{Duration, Local, NaiveDate, TimeZone};
+use chrono::{Duration, Local, NaiveDate, Timelike, TimeZone};
 use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
@@ -52,10 +52,12 @@ pub fn App() -> impl IntoView {
         let first = is_first_load.get_untracked();
         state.set(LoadState::Loading);
         spawn_local(async move {
-            let gauge = rain_feed::fetch_gauge_rain().await;
+            let now = Local::now();
+            let today = now.date_naive();
+            let current_hour = now.hour();
+            let gauge = rain_feed::fetch_gauge_rain(today).await;
             match weather::fetch_forecast(m, t).await {
                 Ok((forecast, forecast_at)) => {
-                    let today = Local::now().date_naive();
                     let history_start = today - Duration::days(weather::PAST_DAYS.into());
                     let history_end = today - Duration::days(1);
                     match weather::fetch_historical_analysis(m, history_start, history_end, t)
@@ -67,10 +69,17 @@ pub fn App() -> impl IntoView {
                             }
                             grid_lat.set(forecast.latitude);
                             grid_lon.set(forecast.longitude);
-                            let days = weather::combine_history_and_forecast(
+                            let mut days = weather::combine_history_and_forecast(
                                 history.days(),
                                 forecast.days(),
                                 today,
+                            );
+                            rain_feed::apply_gauge_to_days(
+                                &mut days,
+                                &gauge,
+                                t,
+                                today,
+                                current_hour,
                             );
                             let scored = score_days(&days, today, &Params::for_trail(t));
 
@@ -376,9 +385,23 @@ fn ReadyView(
             </p>
             <p class="footer-distance">
                 {move || {
-                    source_distance_line(trail.get(), grid_lat.get(), grid_lon.get())
+                    source_distance_line(
+                        trail.get(),
+                        grid_lat.get(),
+                        grid_lon.get(),
+                        &gauge_rain.get(),
+                    )
                 }}
             </p>
+            {move || {
+                gauge_rain.get().stale_for(trail.get()).then(|| {
+                    view! {
+                        <p class="footer-gauge-stale">
+                            "Rain gauges stale — using model rain only."
+                        </p>
+                    }
+                })
+            }}
             <p>
                 "Weather via "
                 <a href="https://open-meteo.com/" target="_blank" rel="noopener">
@@ -953,7 +976,12 @@ fn is_weekend(d: NaiveDate) -> bool {
 }
 
 /// Footer line: forecast grid distance plus unnamed rain-gauge distances.
-fn source_distance_line(trail: Trail, grid_lat: f64, grid_lon: f64) -> String {
+fn source_distance_line(
+    trail: Trail,
+    grid_lat: f64,
+    grid_lon: f64,
+    gauge: &GaugeRain,
+) -> String {
     let t_lat = trail.latitude();
     let t_lon = trail.longitude();
     let mut parts = Vec::new();
@@ -978,7 +1006,7 @@ fn source_distance_line(trail: Trail, grid_lat: f64, grid_lon: f64) -> String {
     gauge_mi.dedup_by(|a, b| (*a - *b).abs() < 0.05);
 
     if !gauge_mi.is_empty() {
-        let gauges = match gauge_mi.as_slice() {
+        let mut gauges = match gauge_mi.as_slice() {
             [one] => {
                 if *one < 0.1 {
                     "rain gauge at trailhead".to_string()
@@ -995,6 +1023,14 @@ fn source_distance_line(trail: Trail, grid_lat: f64, grid_lon: f64) -> String {
                 format!("rain gauges {list} miles away")
             }
         };
+        if let Some(secs) = gauge.last_seen_secs_ago(trail, Local::now().timestamp()) {
+            let age = rain_feed::format_seen_ago(secs);
+            if age == "just now" {
+                gauges.push_str(" (seen just now)");
+            } else {
+                gauges.push_str(&format!(" (seen {age} ago)"));
+            }
+        }
         parts.push(gauges);
     }
 

@@ -78,6 +78,24 @@ pub struct DayWeather {
     pub cloud_3h_pct: [f64; THREE_HOUR_BUCKETS],
 }
 
+impl DayWeather {
+    /// Rebuild daily/window/3h precip totals from `precip_hourly_in`.
+    pub fn recompute_precip_from_hourly(&mut self) {
+        let h = &self.precip_hourly_in;
+        self.precip_in = h.iter().sum();
+        self.precip_ride_in = h[RIDE_START_HOUR as usize..RIDE_END_HOUR as usize]
+            .iter()
+            .sum();
+        self.precip_pm_in = h[RIDE_END_HOUR as usize..PARK_CLOSE_HOUR as usize]
+            .iter()
+            .sum();
+        for bucket in 0..THREE_HOUR_BUCKETS {
+            let start = bucket * 3;
+            self.precip_3h_in[bucket] = h[start..start + 3].iter().sum();
+        }
+    }
+}
+
 impl ForecastResponse {
     pub fn days(&self) -> Vec<DayWeather> {
         let n = self.daily.time.len();

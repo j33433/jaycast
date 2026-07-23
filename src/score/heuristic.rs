@@ -190,14 +190,14 @@ fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> D
         }
     };
 
-    // Mud gate for MixedSurface: temporary overall ding when trail is muddy.
+    // Wet gate for MixedSurface: temporary overall ding when trail is wet.
     let mud_gate = if p.model == RideabilityModel::MixedSurface {
         let trail_note = pack_factors
             .iter()
             .find(|f| f.name == "Trail conditions")
             .map(|f| f.note.as_str())
             .unwrap_or("");
-        if trail_note.starts_with("mud") {
+        if trail_note.starts_with("wet") {
             0.65
         } else {
             1.0
@@ -357,7 +357,7 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
 
     let timing_note = if is_mixed {
         if muddy {
-            let label = mud_period_blurb(days, idx, p, morning_mud);
+            let label = wet_period_label(days, idx, p, morning_mud);
             format!("{label} - let it drain")
         } else if hours_since_end.map_or(false, |h| h < p.mud_clear_hours + 24.0) {
             "drying, firming up".into()
@@ -762,8 +762,8 @@ pub fn score_color(score: f64) -> String {
 fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> String {
     if p.model == RideabilityModel::MixedSurface {
         if let Some(f) = factors.iter().find(|f| f.name == "Trail conditions") {
-            if f.note.starts_with("mud") {
-                return f.note.split(" - ").next().unwrap_or("mud").into();
+            if f.note.starts_with("wet") {
+                return f.note.split(" - ").next().unwrap_or("wet").into();
             }
         }
     }
@@ -824,11 +824,11 @@ fn wet_period_blurb(day: &DayWeather) -> String {
     }
 }
 
-/// Mud period label for MixedSurface trails: "mud AM", "mud PM", or "mud".
+/// Wet period label for MixedSurface trails: "wet AM", "wet PM", or "wet".
 ///
 /// Prefer today's rain timing when the ride day itself is wet. Otherwise a
-/// still-wet trail at ride morning is mud AM (hour-aware overnight carryover).
-fn mud_period_blurb(
+/// still-wet trail at ride morning is wet AM (hour-aware overnight carryover).
+fn wet_period_label(
     days: &[DayWeather],
     idx: usize,
     p: &Params,
@@ -836,12 +836,12 @@ fn mud_period_blurb(
 ) -> String {
     let today = &days[idx];
     if today.precip_in >= p.significant_rain_in {
-        return mud_label_from_3h(&today.precip_3h_in);
+        return wet_label_from_3h(&today.precip_3h_in);
     }
     if morning_mud {
-        return "mud AM".into();
+        return "wet AM".into();
     }
-    "mud".into()
+    "wet".into()
 }
 
 /// Hours from last meaningful rain end to ride morning (8 AM), counting only
@@ -930,13 +930,13 @@ fn precip_hourly_for_event(day: &DayWeather, p: &Params) -> [f64; 24] {
     hourly
 }
 
-fn mud_label_from_3h(buckets: &[f64; 8]) -> String {
+fn wet_label_from_3h(buckets: &[f64; 8]) -> String {
     let morning = buckets[0] + buckets[1] + buckets[2] + buckets[3];
     let afternoon = buckets[4] + buckets[5];
     let evening = buckets[6] + buckets[7];
     let total = morning + afternoon + evening;
     if total <= 0.0 {
-        return "mud".into();
+        return "wet".into();
     }
     let pm = afternoon + evening;
     let (name, amount) = [("AM", morning), ("PM", pm)]
@@ -944,9 +944,9 @@ fn mud_label_from_3h(buckets: &[f64; 8]) -> String {
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
         .unwrap_or(("day", 0.0));
     if amount / total >= 0.55 {
-        format!("mud {name}")
+        format!("wet {name}")
     } else {
-        "mud".into()
+        "wet".into()
     }
 }
 
@@ -1358,7 +1358,7 @@ mod tests {
     }
 
     #[test]
-    fn quiet_waters_mud_am() {
+    fn quiet_waters_wet_am() {
         let mut rain = day("2026-07-02", 0.50, 88.0);
         rain.precip_3h_in = [0.0, 0.20, 0.20, 0.10, 0.0, 0.0, 0.0, 0.0];
         rain.precip_ride_in = 0.30;
@@ -1371,16 +1371,16 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_eq!(d.blurb, "mud AM");
+        assert_eq!(d.blurb, "wet AM");
         assert!(
             d.stars < 3.5,
-            "mud AM should ding the score, got {:.1} stars",
+            "wet AM should ding the score, got {:.1} stars",
             d.stars
         );
     }
 
     #[test]
-    fn quiet_waters_mud_pm() {
+    fn quiet_waters_wet_pm() {
         let mut rain = day("2026-07-02", 0.50, 88.0);
         rain.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.20, 0.20, 0.10, 0.0];
         rain.precip_ride_in = 0.0;
@@ -1393,16 +1393,16 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_eq!(d.blurb, "mud PM");
+        assert_eq!(d.blurb, "wet PM");
         assert!(
             d.stars < 3.5,
-            "mud PM should ding the score, got {:.1} stars",
+            "wet PM should ding the score, got {:.1} stars",
             d.stars
         );
     }
 
     #[test]
-    fn quiet_waters_mud_spread() {
+    fn quiet_waters_wet_spread() {
         let mut rain = day("2026-07-02", 0.60, 88.0);
         rain.precip_3h_in = [0.0, 0.15, 0.0, 0.0, 0.15, 0.0, 0.0, 0.0];
         rain.precip_ride_in = 0.15;
@@ -1415,16 +1415,16 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_eq!(d.blurb, "mud");
+        assert_eq!(d.blurb, "wet");
         assert!(
             d.stars < 3.5,
-            "mud (spread) should ding the score, got {:.1} stars",
+            "wet (spread) should ding the score, got {:.1} stars",
             d.stars
         );
     }
 
     #[test]
-    fn quiet_waters_mud_am_from_late_evening() {
+    fn quiet_waters_wet_am_from_late_evening() {
         // Late evening rain yesterday still wet at 8 AM (end ~11 PM → ~9h).
         let mut prev = day("2026-07-01", 0.50, 88.0);
         prev.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.10, 0.40];
@@ -1440,17 +1440,17 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_eq!(d.blurb, "mud AM");
+        assert_eq!(d.blurb, "wet AM");
         assert!(
             d.stars < 3.5,
-            "late-evening mud AM should ding the score, got {:.1} stars",
+            "late-evening wet AM should ding the score, got {:.1} stars",
             d.stars
         );
     }
 
     #[test]
     fn quiet_waters_afternoon_storm_clears_by_next_morning() {
-        // Jul 18 2026 observation: prior ~3 PM storm was not muddy by morning.
+        // Jul 18 2026 observation: prior ~3 PM storm was not wet by morning.
         let mut prev = day("2026-07-17", 0.42, 95.0);
         prev.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.42, 0.0, 0.0];
         prev.precip_pm_in = 0.42;
@@ -1464,9 +1464,9 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_ne!(d.blurb, "mud AM", "afternoon storm should clear overnight");
+        assert_ne!(d.blurb, "wet AM", "afternoon storm should clear overnight");
         assert!(
-            !d.blurb.starts_with("mud"),
+            !d.blurb.starts_with("wet"),
             "expected recovered trail, got '{}'",
             d.blurb
         );
