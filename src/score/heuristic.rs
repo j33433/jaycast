@@ -894,36 +894,12 @@ fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> 
         .unwrap_or_else(|| format!("high {:.0}°F", day.temp_max_f))
 }
 
-/// Prefer a timed wet label when one part of the day holds most of the rain.
+/// Prefer a timed wet label when rain is clearly confined to one half of the day.
 fn wet_period_blurb(day: &DayWeather) -> String {
-    let morning =
-        day.precip_3h_in[0] + day.precip_3h_in[1] + day.precip_3h_in[2] + day.precip_3h_in[3];
-    let afternoon = day.precip_3h_in[4] + day.precip_3h_in[5];
-    let evening = day.precip_3h_in[6] + day.precip_3h_in[7];
-    let total = morning + afternoon + evening;
-    let period = if total <= 0.0 {
-        "day"
-    } else {
-        let am = morning;
-        let pm = afternoon + evening;
-        let (name, amount) = [
-            ("AM", am),
-            ("PM", pm),
-        ]
-        .into_iter()
-        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-        .unwrap_or(("day", 0.0));
-        // Spread across both halves stays "rainy day".
-        if amount / total >= 0.55 {
-            name
-        } else {
-            "rainy day"
-        }
-    };
-    if period == "rainy day" {
-        "rainy day".into()
-    } else {
-        format!("rain {period}")
+    match am_pm_period(&day.precip_3h_in) {
+        Some("AM") => "rain AM".into(),
+        Some("PM") => "rain PM".into(),
+        _ => "rainy day".into(),
     }
 }
 
@@ -1033,23 +1009,36 @@ fn precip_hourly_for_event(day: &DayWeather, p: &Params) -> [f64; 24] {
     hourly
 }
 
-fn wet_label_from_3h(buckets: &[f64; 8]) -> String {
-    let morning = buckets[0] + buckets[1] + buckets[2] + buckets[3];
-    let afternoon = buckets[4] + buckets[5];
-    let evening = buckets[6] + buckets[7];
-    let total = morning + afternoon + evening;
-    if total <= 0.0 {
-        return "wet".into();
+/// Half-day rain at or above this still looks wet on the bars; do not name the
+/// other half alone.
+const HALF_DAY_WET_IN: f64 = 0.10;
+
+/// Name AM or PM only when the other half is light. Both wet → None (generic).
+fn am_pm_period(buckets: &[f64; 8]) -> Option<&'static str> {
+    let am = buckets[0] + buckets[1] + buckets[2] + buckets[3];
+    let pm = buckets[4] + buckets[5] + buckets[6] + buckets[7];
+    if am >= HALF_DAY_WET_IN && pm >= HALF_DAY_WET_IN {
+        return None;
     }
-    let pm = afternoon + evening;
-    let (name, amount) = [("AM", morning), ("PM", pm)]
-        .into_iter()
-        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-        .unwrap_or(("day", 0.0));
-    if amount / total >= 0.55 {
-        format!("wet {name}")
-    } else {
-        "wet".into()
+    if am >= HALF_DAY_WET_IN {
+        return Some("AM");
+    }
+    if pm >= HALF_DAY_WET_IN {
+        return Some("PM");
+    }
+    if am > pm && am > 0.0 {
+        return Some("AM");
+    }
+    if pm > am && pm > 0.0 {
+        return Some("PM");
+    }
+    None
+}
+
+fn wet_label_from_3h(buckets: &[f64; 8]) -> String {
+    match am_pm_period(buckets) {
+        Some(name) => format!("wet {name}"),
+        None => "wet".into(),
     }
 }
 
@@ -1588,6 +1577,25 @@ mod tests {
     }
 
     #[test]
+    fn quiet_waters_both_halves_wet_not_just_pm() {
+        // Jul 29 2026 ECMWF shape: heavy 6-9 AM plus afternoon/evening rain.
+        // PM was a slight majority under the old 55% rule but AM still looks wet.
+        let mut rain = day("2026-07-29", 0.47, 88.0);
+        rain.precip_3h_in = [0.0, 0.0, 0.19, 0.01, 0.01, 0.13, 0.13, 0.0];
+        rain.precip_ride_in = 0.08;
+        rain.precip_pm_in = 0.23;
+        let days = vec![day("2026-07-28", 0.0, 88.0), rain];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 29).unwrap();
+        let scored = score_days(
+            &days,
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let d = &scored[1];
+        assert_eq!(d.blurb, "wet");
+    }
+
+    #[test]
     fn quiet_waters_wet_am_from_late_evening() {
         // Late evening rain yesterday still wet at 8 AM (end ~11 PM → ~9h).
         let mut prev = day("2026-07-01", 0.50, 88.0);
@@ -1675,7 +1683,7 @@ mod tests {
     }
 
     #[test]
-    fn wet_blurb_names_the_dominant_period() {
+    fn wet_blurb_names_a_single_wet_half() {
         let mut evening = day("2026-07-02", 1.0, 88.0);
         evening.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         assert_eq!(wet_period_blurb(&evening), "rain PM");
@@ -1687,6 +1695,11 @@ mod tests {
         let mut spread = day("2026-07-02", 0.60, 88.0);
         spread.precip_3h_in = [0.0, 0.0, 0.30, 0.0, 0.30, 0.0, 0.0, 0.0];
         assert_eq!(wet_period_blurb(&spread), "rainy day");
+
+        // Both halves meaningful: not "rain PM" just because PM is larger.
+        let mut both = day("2026-07-29", 0.47, 88.0);
+        both.precip_3h_in = [0.0, 0.0, 0.19, 0.01, 0.01, 0.13, 0.13, 0.0];
+        assert_eq!(wet_period_blurb(&both), "rainy day");
     }
 
     #[test]
