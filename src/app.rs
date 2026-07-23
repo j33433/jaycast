@@ -100,17 +100,10 @@ pub fn App() -> impl IntoView {
                             }
 
                             let prev_sel = selected.get_untracked();
-                            if first
-                                || (prev_sel.is_some()
-                                    && !scored.iter().any(|d| Some(d.date) == prev_sel))
+                            if prev_sel.is_some()
+                                && !scored.iter().any(|d| Some(d.date) == prev_sel)
                             {
-                                let pick = scored
-                                    .iter()
-                                    .find(|d| d.best)
-                                    .or_else(|| scored.get(today_idx))
-                                    .or_else(|| scored.first())
-                                    .map(|d| d.date);
-                                selected.set(pick);
+                                selected.set(None);
                             }
 
                             is_first_load.set(false);
