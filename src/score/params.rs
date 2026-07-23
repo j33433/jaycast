@@ -29,13 +29,12 @@ pub struct Params {
     pub pack_fade_hours: f64,
     /// Baseline timing quality after a long dry spell.
     pub dry_timing_floor: f64,
-    /// Hours after meaningful rain that Markham may remain closed while draining.
+    /// Base hours after meaningful rain that Markham may remain closed while draining.
     pub drainage_hours: f64,
-    /// Rain total (inches) at which the full drainage_hours window applies.
-    /// Lighter rain scales the window down proportionally.
-    pub drainage_ref_rain_in: f64,
-    /// Minimum fraction of drainage_hours for trace-level rain (0..1).
-    pub drainage_scale_floor: f64,
+    /// Additional drainage hours per inch of rain.
+    pub drainage_hours_per_in: f64,
+    /// Maximum drainage window for heavy events.
+    pub drainage_max_hours: f64,
     /// Hours after rain ends before MixedSurface is no longer muddy at ride morning.
     /// Afternoon storms that finish by ~4 PM clear by the next 8 AM ride window.
     pub mud_clear_hours: f64,
@@ -83,8 +82,8 @@ impl Default for Params {
             pack_fade_hours: 72.0, // ~3 days
             dry_timing_floor: 0.1,
             drainage_hours: 8.5,
-            drainage_ref_rain_in: 0.70,
-            drainage_scale_floor: 0.35,
+            drainage_hours_per_in: 8.0,
+            drainage_max_hours: 18.5,
             mud_clear_hours: 14.0,
             ride_day_precip_soft: 0.05,
             ride_day_precip_hard: 0.4,
@@ -115,10 +114,12 @@ impl Params {
             Trail::Markham => {
                 params.model = RideabilityModel::Drainage;
                 params.significant_rain_in = 0.10;
-                // July 11 observation: 0.21 in ending around 4 AM reopened at 12:30 PM.
+                // Gauge calibration: Jul 10-11's 0.23 in ending ~2 AM reopened
+                // around 12:30 PM; Jul 15's 1.25 in ending ~6 PM reopened the
+                // next day around 12:30 PM.
                 params.drainage_hours = 8.5;
-                params.drainage_ref_rain_in = 0.70;
-                params.drainage_scale_floor = 0.35;
+                params.drainage_hours_per_in = 8.0;
+                params.drainage_max_hours = 18.5;
                 params.w_pack = 0.55;
                 params.w_weather = 0.35;
             }

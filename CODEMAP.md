@@ -173,14 +173,14 @@ Tunable thresholds for the trail rideability heuristics (121 lines).
 
 **Types:**
 - `enum RideabilityModel { SandPack, Drainage, MixedSurface }`
-- `struct Params` - 22 public fields: `model`, `significant_rain_in`, `ideal_antecedent_in`, `min_useful_rain_in`, `max_useful_rain_in`, `pack_lookback_hours`, `ideal_hours_since_rain`, `pack_fade_hours`, `dry_timing_floor`, `drainage_hours`, `ride_day_precip_soft`, `ride_day_precip_hard`, `et0_dry_ref`, `et0_modulation`, `temp_ideal_low`, `temp_ideal_high`, `temp_ok_low`, `temp_ok_high`, `wind_ideal_low`, `wind_ideal_high`, `wind_calm_floor`, `wind_bad`, `w_pack`, `w_weather`, `w_confidence`
+- `struct Params` - public trail tuning fields including rain thresholds, pack timing, `drainage_hours`, `drainage_hours_per_in`, `drainage_max_hours`, ride-window rain, ET0, temperature, wind, and score weights
 
 **`impl Default for Params`:** Camp Murphy baseline (pack 0.55 / weather 0.35 / confidence 0.10)
 
 **`impl Params`:**
 - `pub fn for_trail(trail: Trail) -> Self` - tuned params per trail:
   - Camp Murphy: SandPack, default
-  - Markham: Drainage model, `significant_rain_in` 0.10, `drainage_hours` 8.5
+  - Markham: Drainage model, `significant_rain_in` 0.10; drainage is 8.5 base hours + 8 hours/in, capped at 18.5 hours
   - Quiet Waters: MixedSurface, higher dry baseline, weather-weighted 0.55
 
 ### `src/score/heuristic.rs`
@@ -205,14 +205,14 @@ Heuristic rideability score for sandy trails that pack after rain (1048 lines).
 
 **Functions (public):**
 - `pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec<DayForecast>` - scores every day, marks best among non-past
-- `pub fn score_days_as_of(..., as_of_hour: Option<u32>)` - same, but Markham drainage on calendar today only counts hours before `as_of_hour`
+- `pub fn score_days_as_of(..., as_of_hour: Option<u32>)` - same, but Markham drainage on calendar today only scores rain before `as_of_hour`; meaningful future PM rain adds a warning without lowering current drainage
 - `pub fn score_to_stars(score: f64) -> f64` - maps 0..=1 to 1.0..=5.0 (one decimal)
 - `pub fn score_color(score: f64) -> String` - HSL color: rust red to sand to scrub green
 
 **Functions (private):**
 - `score_one(days, idx, today, p) -> DayForecast` - combines pack/weather/confidence with wet gate
 - `pack_quality(days, idx, p) -> (f64, Vec<Factor>)` - antecedent rain amount + timing + ride-window wetness (SandPack/MixedSurface)
-- `drainage_status(days, idx, p) -> DrainageStatus` - Markham hourly-rain closure model
+- `drainage_status(days, idx, p) -> DrainageStatus` - Markham hourly-rain closure model with amount-dependent drainage duration
 - `latest_meaningful_rain_event(days, idx, p) -> Option<RainEvent>` - walks backward through hourly data, groups rain with 3h gap tolerance, ignores traces below `TRACE_RAIN_IN`
 - `weather_quality(day, p) -> (f64, Vec<Factor>)` - temperature (with heat-index ding), wind (centered band), sky
 - `confidence(date, today) -> (f64, Factor)` - full confidence today through day 3, tapers to 0.45 by day 7
@@ -223,7 +223,7 @@ Heuristic rideability score for sandy trails that pack after rain (1048 lines).
 - `trap_score(x, a, b, c, d) -> f64` - trapezoid membership function
 - `lerp(a, b, t) -> f64`
 
-**Tests (16):** `post_rain_dry_day_scores_high`, `long_dry_spell_scores_low_pack`, `ride_window_rain_penalized`, `afternoon_rain_tolerated`, `overnight_rain_does_not_penalize_the_ride_window`, `light_ride_window_rain_is_tolerated_on_packed_sand`, `cloudy_slows_drying_vs_sunny`, `dead_calm_dings_wind`, `markham_uses_hourly_rain_for_same_day_closure`, `markham_afternoon_rain_open_am`, `markham_combines_rain_across_midnight`, `markham_ignores_short_showers`, `markham_trailing_trace_does_not_extend_closure`, `quiet_waters_keeps_a_higher_dry_surface_baseline`, `stars_mapping_boundaries`, `wet_blurb_names_the_dominant_period`
+**Tests include:** `post_rain_dry_day_scores_high`, `long_dry_spell_scores_low_pack`, `ride_window_rain_penalized`, `afternoon_rain_tolerated`, `overnight_rain_does_not_penalize_the_ride_window`, `light_ride_window_rain_is_tolerated_on_packed_sand`, `cloudy_slows_drying_vs_sunny`, `dead_calm_dings_wind`, `markham_moderate_overnight_rain_reopens_around_midday`, `markham_heavy_pm_rain_carries_into_next_morning`, `markham_warns_about_future_pm_rain_without_tanking_morning`, `markham_afternoon_rain_open_am`, `markham_combines_rain_across_midnight`, `markham_ignores_short_showers`, `markham_trailing_trace_does_not_extend_closure`, `quiet_waters_keeps_a_higher_dry_surface_baseline`, `stars_mapping_boundaries`, `wet_blurb_names_the_dominant_period`
 
 ## src/weather/
 
