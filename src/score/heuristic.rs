@@ -70,11 +70,24 @@ pub struct DayForecast {
 
 /// Score every day in the series. Antecedent rain uses earlier days in `days`.
 /// `best` is set only among today and future days.
+///
+/// Uses the full calendar day of precip (for tests, CLI, and future days).
 pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec<DayForecast> {
+    score_days_as_of(days, today, params, None)
+}
+
+/// Like [`score_days`], but drainage on calendar `today` only counts hourly
+/// rain strictly before `as_of_hour` (local). `None` means the full day.
+pub fn score_days_as_of(
+    days: &[DayWeather],
+    today: NaiveDate,
+    params: &Params,
+    as_of_hour: Option<u32>,
+) -> Vec<DayForecast> {
     let mut forecasts = Vec::new();
 
     for (idx, _day) in days.iter().enumerate() {
-        forecasts.push(score_one(days, idx, today, params));
+        forecasts.push(score_one(days, idx, today, params, as_of_hour));
     }
 
     if let Some(best_idx) = forecasts
@@ -139,10 +152,17 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
     }
 }
 
-fn score_one(days: &[DayWeather], idx: usize, today: NaiveDate, p: &Params) -> DayForecast {
+fn score_one(
+    days: &[DayWeather],
+    idx: usize,
+    today: NaiveDate,
+    p: &Params,
+    as_of_hour: Option<u32>,
+) -> DayForecast {
     let day = &days[idx];
 
-    let drainage = (p.model == RideabilityModel::Drainage).then(|| drainage_status(days, idx, p));
+    let drainage = (p.model == RideabilityModel::Drainage)
+        .then(|| drainage_status(days, idx, today, p, as_of_hour));
     let (pack_q, pack_factors) = match drainage.as_ref() {
         Some(status) => (
             1.0,
@@ -442,8 +462,14 @@ struct DrainageStatus {
     closure_status: ClosureStatus,
 }
 
-fn drainage_status(days: &[DayWeather], idx: usize, p: &Params) -> DrainageStatus {
-    let Some(rain_event) = latest_meaningful_rain_event(days, idx, p) else {
+fn drainage_status(
+    days: &[DayWeather],
+    idx: usize,
+    today: NaiveDate,
+    p: &Params,
+    as_of_hour: Option<u32>,
+) -> DrainageStatus {
+    let Some(rain_event) = latest_meaningful_rain_event(days, idx, today, p, as_of_hour) else {
         return DrainageStatus {
             quality: 1.0,
             daylight_fraction: 1.0,
@@ -524,7 +550,13 @@ struct RainEvent {
     start_hour: f64,
 }
 
-fn latest_meaningful_rain_event(days: &[DayWeather], idx: usize, p: &Params) -> Option<RainEvent> {
+fn latest_meaningful_rain_event(
+    days: &[DayWeather],
+    idx: usize,
+    today: NaiveDate,
+    p: &Params,
+    as_of_hour: Option<u32>,
+) -> Option<RainEvent> {
     let mut total_in = 0.0;
     let mut end_hour = None;
     let mut start_hour = None;
@@ -532,8 +564,20 @@ fn latest_meaningful_rain_event(days: &[DayWeather], idx: usize, p: &Params) -> 
 
     for day_idx in (0..=idx).rev() {
         let day = &days[day_idx];
+        // On calendar today, ignore hours that have not completed yet so a
+        // forecast afternoon storm does not close the morning.
+        let hour_end = if day.date == today {
+            as_of_hour.map(|h| (h as usize).min(24)).unwrap_or(24)
+        } else {
+            24
+        };
+        if hour_end == 0 {
+            continue;
+        }
+        // Prefer real hourly tips anywhere on the day so a PM-only forecast is
+        // not collapsed onto midday when scanning morning hours only.
         let has_hourly_data = day.precip_hourly_in.iter().any(|amount| *amount > 0.0);
-        for hour in (0..24).rev() {
+        for hour in (0..hour_end).rev() {
             let amount = if has_hourly_data {
                 day.precip_hourly_in[hour]
             } else if day.precip_in >= p.significant_rain_in && hour == 11 {
@@ -1224,6 +1268,36 @@ mod tests {
         // Day after is clear.
         assert_eq!(scored[1].blurb, "likely open");
         assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
+    }
+
+    #[test]
+    fn markham_ignores_future_hours_as_of_morning() {
+        // Light PM storm that previously collapsed the whole day to 1★ when
+        // scored with the full forecast at 10 AM.
+        let mut rain = day("2026-07-23", 0.10, 90.0);
+        rain.precip_prob_max = 70.0;
+        rain.precip_prob_ride_max = 20.0;
+        rain.precip_hourly_in[15] = 0.024;
+        rain.precip_hourly_in[16] = 0.079;
+        let days = vec![day("2026-07-22", 0.0, 88.0), rain];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 23).unwrap();
+        let p = Params::for_trail(crate::trails::Trail::Markham);
+
+        let morning = score_days_as_of(&days, today, &p, Some(10));
+        assert_eq!(morning[1].blurb, "likely open");
+        assert_eq!(morning[1].closure_status, ClosureStatus::Clear);
+        assert!(
+            morning[1].stars >= 3.0,
+            "morning should not be 1★ for forecast PM rain: got {:.1}",
+            morning[1].stars
+        );
+
+        let evening = score_days_as_of(&days, today, &p, Some(18));
+        assert_ne!(
+            evening[1].blurb, "likely open",
+            "after the storm, drainage should apply"
+        );
+        assert_eq!(evening[1].closure_status, ClosureStatus::Possible);
     }
 
     #[test]

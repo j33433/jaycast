@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::rain_feed::{self, GaugeRain};
-use crate::score::{score_color, score_days, DayForecast, Params};
+use crate::score::{score_color, score_days_as_of, DayForecast, Params};
 use crate::theme::{
     apply_theme, apply_theme_color, detect_os_theme, load_theme_pref, save_theme_pref, Theme,
 };
@@ -81,7 +81,12 @@ pub fn App() -> impl IntoView {
                                 today,
                                 current_hour,
                             );
-                            let scored = score_days(&days, today, &Params::for_trail(t));
+                            let scored = score_days_as_of(
+                                &days,
+                                today,
+                                &Params::for_trail(t),
+                                Some(current_hour),
+                            );
 
                             let today_idx = scored
                                 .iter()

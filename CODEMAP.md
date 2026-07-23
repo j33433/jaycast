@@ -205,6 +205,7 @@ Heuristic rideability score for sandy trails that pack after rain (1048 lines).
 
 **Functions (public):**
 - `pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec<DayForecast>` - scores every day, marks best among non-past
+- `pub fn score_days_as_of(..., as_of_hour: Option<u32>)` - same, but Markham drainage on calendar today only counts hours before `as_of_hour`
 - `pub fn score_to_stars(score: f64) -> f64` - maps 0..=1 to 1.0..=5.0 (one decimal)
 - `pub fn score_color(score: f64) -> String` - HSL color: rust red to sand to scrub green
 
