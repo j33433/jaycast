@@ -131,6 +131,13 @@ pub fn App() -> impl IntoView {
         load();
     });
 
+    spawn_local(async move {
+        loop {
+            gloo_timers::future::TimeoutFuture::new(15 * 60 * 1000).await;
+            load();
+        }
+    });
+
     let switch_model = move |new_model: WeatherModel| {
         if model.get_untracked() == new_model {
             return;
