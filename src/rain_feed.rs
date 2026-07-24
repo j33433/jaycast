@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use gloo_net::http::Request;
 use serde::Deserialize;
 
@@ -116,7 +116,8 @@ pub async fn fetch_gauge_rain(today: NaiveDate) -> GaugeRain {
 }
 
 async fn fetch_inner(today: NaiveDate) -> Result<GaugeRain, String> {
-    let resp = Request::get(FEED_URL)
+    let url = format!("{}?t={}", FEED_URL, Utc::now().timestamp_millis());
+    let resp = Request::get(&url)
         .send()
         .await
         .map_err(|e| e.to_string())?;
