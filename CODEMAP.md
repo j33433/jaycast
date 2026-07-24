@@ -4,14 +4,18 @@ File-level map of the jaycast repository: source, assets, test data, and config.
 
 ```
 jaycast/
+  .gitignore
   Cargo.toml
   Cargo.lock
+  LICENSE
   Trunk.toml
   index.html
   robots.txt
   sitemap.xml
   README.md
+  CLI.md
   CODEMAP.md
+  XWEATHER.md
   assets/
     style.css
     jaycast-icon.png
@@ -37,10 +41,12 @@ jaycast/
     rain_feed.rs
     xweather/
       mod.rs
+      rescan.rs
   tests/
     fixtures/
       markham-2mo.json
       closures.txt
+      qw.txt
 ```
 
 ## Root
@@ -49,11 +55,14 @@ jaycast/
 |------|-------------|
 | `Cargo.toml` | Package manifest. Crate types `cdylib` + `rlib`. Deps: leptos 0.7 (csr), gloo-net, serde, serde_json, chrono, wasm-bindgen, web-sys, console_error_panic_hook. Native-only: ureq. Feature `cli` gates the binary (analyze, backtest, xweather). Release profile: `opt-level="z"`, lto, single codegen unit. |
 | `Cargo.lock` | Dependency lockfile (auto-generated). |
+| `LICENSE` | GPL-3.0-or-later. |
 | `Trunk.toml` | Trunk build config. Target `index.html`, dist dir `dist/`, public URL `/jaycast/`. |
 | `index.html` | App entry HTML. Inline JS applies saved theme before render. OpenGraph/Twitter meta, JSON-LD structured data. Trunk asset links for icon, CSS, WASM, and copy-file directives for SVGs, LICENSE, robots.txt, sitemap.xml. |
 | `robots.txt` | Allows `/jaycast/`, declares sitemap URL. |
 | `sitemap.xml` | Single URL entry for the deployed site. |
 | `README.md` | Project description, trail profiles, develop/test/build instructions, CLI usage, score model summary. |
+| `CLI.md` | CLI reference with examples for `analyze`, `backtest`, `xweather publish/dump/rescan`. |
+| `XWEATHER.md` | Xweather auth, station map, QC rules, feed CLI reference. |
 
 ## assets/
 
@@ -83,20 +92,20 @@ Crate root. Module doc: "weather-informed MTB trail rideability forecasts."
 
 ### `src/app.rs`
 
-Leptos UI component tree (874 lines). All components and helpers are private.
+Leptos UI component tree. All components and helpers are private.
 
 **Types:**
 - `enum LoadState { Loading, Ready(Vec<DayForecast>), Error(String) }`
 
 **Components:**
-- `App()` - root; manages state signals (load state, selected day, view start, refreshed_at, model, trail, dialog, grid coords, theme, first load), runs fetch+score effect, handles model/trail switching
+- `App()` - root; manages state signals (load state, selected day, view start, refreshed_at, model, trail, dialog, grid coords, theme, gauge_rain, first load), runs fetch+score effect + 15-min auto-refresh loop, handles model/trail switching
 - `LocationDialog(open, selected, on_change)` - modal trail chooser
 - `LoadingView()` - skeleton loading state
 - `ErrorView(message, on_retry)` - error display with retry
-- `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, on_switch)` - composes Hero, TimelineNav, Timeline, footer
+- `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, gauge_rain, on_switch)` - composes Hero, TimelineNav, Timeline, footer
 - `Hero(days, refreshed_at, model, trail, grid_lat, grid_lon, theme, on_switch)` - best ride window, GFS/ECMWF toggle, theme toggle (inline sun/moon SVG), distance display
 - `TimelineNav(days, view_start, selected)` - Older/Today/Newer scroll nav
-- `Timeline(days, view_start, selected, trail)` - day cards with rain/cloud wave SVG backgrounds, AM/PM temp border colors, Markham Facebook status link
+- `Timeline(days, view_start, selected, trail, gauge_rain)` - day cards with rain/cloud wave SVG backgrounds, AM/PM temp border colors, blue gauge curve overlay, Markham Facebook status link
 
 **Helper functions:**
 - `day_detail_view(d, trail)` - detail panel with factor breakdown bars
@@ -111,10 +120,12 @@ Leptos UI component tree (874 lines). All components and helpers are private.
 - `format_dow(d) -> String`
 - `is_weekend(d) -> bool`
 - `haversine_km(lat1, lon1, lat2, lon2) -> f64`
+- `source_distance_line(trail, grid_lat, grid_lon, gauge)` - footer: forecast distance + gauge distances + observation timestamps
+- `format_weather_as_of(fetched_at, model, init_time) -> String` - shows model init time in local time (e.g. "forecast as of 6:00 AM") with fallback to fetch time
 
 ### `src/theme.rs`
 
-Light/dark theme preference with localStorage persistence (89 lines).
+Light/dark theme preference with localStorage persistence.
 
 **Types:**
 - `enum Theme { Light, Dark }`
@@ -134,7 +145,7 @@ Light/dark theme preference with localStorage persistence (89 lines).
 
 ### `src/trails.rs`
 
-Trail definitions and localStorage/URL persistence (149 lines).
+Trail definitions and localStorage/URL persistence.
 
 **Types:**
 - `enum Trail { CampMurphy, Markham, QuietWaters }`
@@ -150,6 +161,7 @@ Trail definitions and localStorage/URL persistence (149 lines).
 - `pub fn short_name(self) -> &'static str`
 - `pub fn tagline(self) -> &'static str` - `"scrub trail pack"` / `"drainage advisory"` / `"mixed-surface forecast"`
 - `pub fn brand(self) -> &'static str` - `"jay"` / `"gator"` / `"eagle"`
+- `pub fn rain_gauge_coords(self) -> &'static [(f64, f64)]` - gauge lat/lon pairs for footer distance display
 - `pub fn from_slug(value: &str) -> Option<Self>`
 
 **Functions:**
@@ -165,15 +177,15 @@ Trail definitions and localStorage/URL persistence (149 lines).
 
 ### `src/score/mod.rs`
 
-Module hub (7 lines). Re-exports `score_color`, `score_days`, `ClosureStatus`, `DayForecast` from `heuristic`; `Params`, `RideabilityModel` from `params`.
+Module hub. Re-exports `score_color`, `score_days`, `ClosureStatus`, `DayForecast` from `heuristic`; `Params`, `RideabilityModel` from `params`.
 
 ### `src/score/params.rs`
 
-Tunable thresholds for the trail rideability heuristics (121 lines).
+Tunable thresholds for the trail rideability heuristics.
 
 **Types:**
 - `enum RideabilityModel { SandPack, Drainage, MixedSurface }`
-- `struct Params` - public trail tuning fields including rain thresholds, pack timing, `drainage_hours`, `drainage_hours_per_in`, `drainage_max_hours`, ride-window rain, ET0, temperature, wind, and score weights
+- `struct Params` - public trail tuning fields including rain thresholds, pack timing, `drainage_hours`, `drainage_hours_per_in`, `drainage_max_hours`, `mud_clear_hours`, ride-window rain, ET0, temperature, wind, and score weights
 
 **`impl Default for Params`:** Camp Murphy baseline (pack 0.55 / weather 0.35 / confidence 0.10)
 
@@ -185,32 +197,34 @@ Tunable thresholds for the trail rideability heuristics (121 lines).
 
 ### `src/score/heuristic.rs`
 
-Heuristic rideability score for sandy trails that pack after rain (1048 lines).
+Heuristic rideability score for sandy trails that pack after rain.
 
 **Constants (private):**
 - `DAYLIGHT_START_HOUR` = 7.0
 - `DAYLIGHT_END_HOUR` = 20.0
 - `RAIN_EVENT_GAP_HOURS` = 3
 - `TRACE_RAIN_IN` = 0.01
+- `COMFORT_WINDOW` = 7, `COMFORT_THRESHOLD` = 4.0
 
 **Types:**
 - `struct Factor { name: &'static str, note: String, contribution: f64, quality: f64 }`
 - `enum ClosureStatus { NotApplicable, Clear, Possible }`
   - `pub fn is_possible(&self) -> bool`
-- `struct DayForecast` - public fields: `date`, `stars`, `score`, `factors: Vec<Factor>`, `best`, `is_past`, `is_today`, `precip_in`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`, `temp_max_f`, `temp_min_f`, `apparent_am_f`, `apparent_pm_f`, `precip_prob_max`, `precip_prob_ride_max`, `closure_status`, `blurb`, `comfort_note`, `comfort_detail`, `am_vs_avg_f`, `pm_vs_avg_f`
+- `struct DayForecast` - public fields: `date`, `stars`, `score`, `factors: Vec<Factor>`, `best`, `is_past`, `is_today`, `precip_in`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`, `temp_max_f`, `temp_min_f`, `apparent_am_f`, `apparent_pm_f`, `precip_prob_max`, `precip_prob_ride_max`, `closure_status`, `blurb`, `comfort_note` ("AM"/"PM" badge for cool outliers), `comfort_detail` ("6° below avg AM"), `am_vs_avg_f` (delta from 7-day AM avg), `pm_vs_avg_f`
 
 **Private structs:**
 - `DrainageStatus { quality, daylight_fraction, note, blurb, closure_status }`
 - `RainEvent { total_in, end_hour, start_hour }`
 
 **Functions (public):**
-- `pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec<DayForecast>` - scores every day, marks best among non-past
+- `pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec<DayForecast>` - scores every day, marks best among non-past, annotates comfort outliers
 - `pub fn score_days_as_of(..., as_of_hour: Option<u32>)` - same, but Markham drainage on calendar today only scores rain before `as_of_hour`; meaningful future PM rain adds a warning without lowering current drainage
 - `pub fn score_to_stars(score: f64) -> f64` - maps 0..=1 to 1.0..=5.0 (one decimal)
 - `pub fn score_color(score: f64) -> String` - HSL color: rust red to sand to scrub green
 
 **Functions (private):**
 - `score_one(days, idx, today, p) -> DayForecast` - combines pack/weather/confidence with wet gate
+- `annotate_comfort_outliers(forecasts)` - marks days whose AM/PM apparent temp is unusually cool vs trailing 7-day average; sets `comfort_note`, `comfort_detail`, `am_vs_avg_f`, `pm_vs_avg_f`. UI only, does not affect scores.
 - `pack_quality(days, idx, p) -> (f64, Vec<Factor>)` - antecedent rain amount + timing + ride-window wetness (SandPack/MixedSurface)
 - `drainage_status(days, idx, p) -> DrainageStatus` - Markham hourly-rain closure model with amount-dependent drainage duration
 - `latest_meaningful_rain_event(days, idx, p) -> Option<RainEvent>` - walks backward through hourly data, groups rain with 3h gap tolerance, ignores traces below `TRACE_RAIN_IN`
@@ -223,13 +237,13 @@ Heuristic rideability score for sandy trails that pack after rain (1048 lines).
 - `trap_score(x, a, b, c, d) -> f64` - trapezoid membership function
 - `lerp(a, b, t) -> f64`
 
-**Tests include:** `post_rain_dry_day_scores_high`, `long_dry_spell_scores_low_pack`, `ride_window_rain_penalized`, `afternoon_rain_tolerated`, `overnight_rain_does_not_penalize_the_ride_window`, `light_ride_window_rain_is_tolerated_on_packed_sand`, `cloudy_slows_drying_vs_sunny`, `dead_calm_dings_wind`, `markham_moderate_overnight_rain_reopens_around_midday`, `markham_heavy_pm_rain_carries_into_next_morning`, `markham_warns_about_future_pm_rain_without_tanking_morning`, `markham_afternoon_rain_open_am`, `markham_combines_rain_across_midnight`, `markham_ignores_short_showers`, `markham_trailing_trace_does_not_extend_closure`, `quiet_waters_keeps_a_higher_dry_surface_baseline`, `stars_mapping_boundaries`, `wet_blurb_names_the_dominant_period`
+**Tests include:** `post_rain_dry_day_scores_high`, `long_dry_spell_scores_low_pack`, `ride_window_rain_penalized`, `afternoon_rain_tolerated`, `overnight_rain_does_not_penalize_the_ride_window`, `light_ride_window_rain_is_tolerated_on_packed_sand`, `cloudy_slows_drying_vs_sunny`, `dead_calm_dings_wind`, `markham_moderate_overnight_rain_reopens_around_midday`, `markham_heavy_pm_rain_carries_into_next_morning`, `markham_warns_about_future_pm_rain_without_tanking_morning`, `markham_afternoon_rain_open_am`, `markham_combines_rain_across_midnight`, `markham_ignores_short_showers`, `markham_trailing_trace_does_not_extend_closure`, `quiet_waters_keeps_a_higher_dry_surface_baseline`, `stars_mapping_boundaries`, `wet_blurb_names_the_dominant_period`, `good_outlier_detected_when_cooler_than_trend`, `warm_morning_records_positive_am_delta`, `warm_afternoon_records_positive_pm_delta`, `no_outlier_when_within_trend`, `outlier_needs_trailing_data`
 
 ## src/weather/
 
 ### `src/weather/mod.rs`
 
-Open-Meteo weather client (336 lines). Private module `types` re-exported.
+Open-Meteo weather client. Private module `types` re-exported.
 
 **Constants:**
 - `pub const TIMEZONE: &str = "America/New_York"`
@@ -239,15 +253,20 @@ Open-Meteo weather client (336 lines). Private module `types` re-exported.
 
 **Types:**
 - `enum WeatherModel { GfsSeamless, Ecmwf }`
-  - `pub fn label(self) -> &'static str` - `"NOAA GFS seamless (HRRR+GFS)"` / `"ECMWF IFS HRES 9km"`
-  - `pub fn short(self) -> &'static str` - `"GFS"` / `"ECMWF"`
-- `struct CacheEntry { fetched_at, start_date, end_date, payload }` (private, Serialize/Deserialize)
+  - `pub fn label(self) -> &'static str`
+  - `pub fn short(self) -> &'static str`
+  - `fn endpoint(self) -> &'static str` - base API URL
+  - `fn models_param(self) -> Option<&'static str>` - `"gfs_seamless"` / `"ecmwf_ifs"`
+  - `fn cache_key(self, trail) -> String` - localStorage cache key
+  - `fn meta_domain(self) -> &'static str` - `"ncep_hrrr_conus"` / `"ecmwf_ifs"` for metadata API
+- `type WeatherFetch = (ForecastResponse, i64)`
 
 **Functions (public):**
 - `pub fn load_model_pref() -> WeatherModel` - localStorage, defaults to GFS
 - `pub fn save_model_pref(model: WeatherModel)`
-- `pub async fn fetch_forecast(model, trail) -> Result<ForecastResponse, String>` - checks cache, fetches via gloo-net, saves cache
-- `pub async fn fetch_historical_analysis(model, start, end, trail) -> Result<ForecastResponse, String>` - archive API for completed days using the selected model
+- `pub async fn fetch_model_init_time(model) -> Option<i64>` - fetches `last_run_initialisation_time` from Open-Meteo metadata API (`/data/{domain}/static/meta.json`), 30-min localStorage cache
+- `pub async fn fetch_forecast(model, trail) -> Result<WeatherFetch, String>` - checks cache, fetches via gloo-net, saves cache
+- `pub async fn fetch_historical_analysis(model, start, end, trail) -> Result<WeatherFetch, String>` - archive API for completed days using the selected model
 - `pub fn combine_history_and_forecast(history, forecast, today) -> Vec<DayWeather>` - retains past days from history, future days from forecast
 - `pub fn build_date_range_url(model, start, end, trail) -> String` - forecast API URL for a fixed date range
 - `pub fn build_historical_url(model, start, end, trail) -> String` - archive API URL (`gfs_seamless` or `ecmwf_ifs`)
@@ -259,7 +278,7 @@ Open-Meteo weather client (336 lines). Private module `types` re-exported.
 
 ### `src/weather/types.rs`
 
-Open-Meteo API response types and day-window extraction (302 lines).
+Open-Meteo API response types and day-window extraction.
 
 **Constants (private):**
 - `RIDE_START_HOUR` = 8, `RIDE_END_HOUR` = 12, `PARK_CLOSE_HOUR` = 20
@@ -268,13 +287,14 @@ Open-Meteo API response types and day-window extraction (302 lines).
 **Types (Deserialize + Serialize):**
 - `struct ForecastResponse { latitude: f64, longitude: f64, timezone: Option<String>, daily: DailyBlock, hourly: Option<HourlyBlock> }`
 - `struct DailyBlock { time: Vec<String>, precipitation_sum, precipitation_probability_max, temperature_2m_max, temperature_2m_min, apparent_temperature_max, wind_speed_10m_max, wind_gusts_10m_max, et0_fao_evapotranspiration }` (all `Vec<Option<f64>>` except time)
-- `struct HourlyBlock { time: Vec<String>, precipitation, precipitation_probability (serde default), cloud_cover }` (all `Vec<Option<f64>>`)
-- `struct DayWeather` (Clone, Debug) - 14 fields: `date: NaiveDate`, `precip_in`, `precip_prob_max`, `precip_prob_ride_max`, `temp_max_f`, `temp_min_f`, `apparent_max_f`, `wind_max_mph`, `gust_max_mph`, `et0`, `precip_ride_in`, `precip_pm_in`, `precip_hourly_in: [f64;24]`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`
+- `struct HourlyBlock { time: Vec<String>, precipitation, precipitation_probability (serde default), cloud_cover, apparent_temperature }` (all `Vec<Option<f64>>`)
+- `struct DayWeather` (Clone, Debug) - fields: `date: NaiveDate`, `precip_in`, `precip_prob_max`, `precip_prob_ride_max`, `temp_max_f`, `temp_min_f`, `apparent_max_f`, `apparent_am_f`, `apparent_pm_f`, `wind_max_mph`, `gust_max_mph`, `et0`, `precip_ride_in`, `precip_pm_in`, `precip_hourly_in: [f64;24]`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`
 
 **`impl ForecastResponse`:**
 - `pub fn days(&self) -> Vec<DayWeather>` - parses daily + hourly into per-day `DayWeather`
 - `fn hourly_precip_for_date(&self, date_str) -> [f64;24]` (private)
 - `fn precip_windows_for_date(&self, date_str) -> (f64, f64)` (private) - ride window (8AM-noon) and PM (noon-sundown) totals
+- `fn apparent_windows_for_date(&self, date_str) -> (f64, f64)` (private) - average apparent temp for AM and PM windows
 - `fn prob_ride_max_for_date(&self, date_str, daily_fallback) -> f64` (private)
 - `fn three_hour_weather_for_date(&self, date_str) -> ([f64;8], [f64;8])` (private) - 3h rain and cloud summaries
 
@@ -282,7 +302,7 @@ Open-Meteo API response types and day-window extraction (302 lines).
 - `fn hour_of(ts: &str) -> Option<u32>` - parses local hour from ISO8601 timestamp
 - `fn opt(v: Option<&Option<f64>>) -> f64` - unwraps nested Option
 
-**Tests (1):** `rain_windows_start_when_the_park_opens`
+**Tests (2):** `rain_windows_start_when_the_park_opens`, `apparent_windows_averaged_correctly`
 
 ## src/bin/
 
@@ -290,13 +310,25 @@ Open-Meteo API response types and day-window extraction (302 lines).
 
 Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max tip per hour across stations per trail/day. Unusable when every station's today day is `stale` (footer warning; no overlay or scoring blend). When usable, past completed hours replace model precip before scoring; today uses only non-stale stations. Day cards draw blue gauge curve over the model rain wave when usable.
 
+Exposes `last_seen_ts(trail) -> Option<i64>` for displaying observation timestamps in the footer.
+
 ### `src/xweather/mod.rs`
 
-Native-only Xweather hourly rain feed builder (`#[cfg(not(target_arch = "wasm32"))]`). Auth via `XWEATHER_API_KEY`. Fetches `/observations/archive/{id}` for Markham, Camp Murphy, and Quiet Waters stations, buckets `precipSinceLastObIN` into 24 hourly tip totals (inches), writes schema-versioned JSON. Past-day cache; `rescan` ranks nearby gauges and rejects bad rain meters.
+Native-only Xweather hourly rain feed builder. Auth via `XWEATHER_API_KEY`. Fetches `/observations/archive/{id}` for Markham, Camp Murphy, and Quiet Waters stations, buckets `precipSinceLastObIN` into 24 hourly tip totals (inches), writes schema-versioned JSON. Past-day cache; `rescan` ranks nearby gauges and rejects bad rain meters.
+
+**Types:** `Feed`, `TrailFeed`, `StationFeed`, `DayFeed` - JSON serialization types for the rain feed.
+
+**Private module:** `rescan` - station discovery and QC ranking.
 
 **CLI (via bin):** `publish`, `dump`, `rescan [trail]`.
 
-**Tests:** day range, local hour parse, tip bucketing, stale detection, cache, rescan parsers.
+**Tests:** day range, local hour parse, tip bucketing, stale detection, cache.
+
+### `src/xweather/rescan.rs`
+
+Discovers nearby PWS and mesonet stations via Xweather `/observations/closest`, rejects blocklisted / no-precip / stuck-zero gauges, ranks by distance tier (primary ≤5 mi, backup 5–10 mi). Print-only audit. Does not modify the feed station table.
+
+**Tests:** distance tiers, network kind parsing, stuck-zero detection, evaluation shape, haversine.
 
 ### `src/bin/jaycast.rs`
 
@@ -322,6 +354,6 @@ Native CLI binary (requires `cli` feature). Uses `ureq` for HTTP.
 
 | File | Description |
 |------|-------------|
-| `markham-2mo.json` | Open-Meteo archive API response for Markham Park (ecmwf_ifs, 2026-05-01 to 2026-07-12, 73 days, 1752 hourly points, 57KB). Contains daily and hourly precipitation, probability, cloud cover, temperature, wind, and ET0 fields. Used by `cargo run --features cli --bin jaycast -- backtest tests/fixtures/markham-2mo.json markham`. |
+| `markham-2mo.json` | Open-Meteo archive API response for Markham Park (ecmwf_ifs, 2026-05-01 to 2026-07-12, 73 days, 57KB). Contains daily and hourly precipitation, probability, cloud cover, temperature, wind, and ET0 fields. Used by `cargo run --features cli --bin jaycast -- backtest tests/fixtures/markham-2mo.json markham`. |
 | `closures.txt` | Notes of closures gathered from Facebook and likely missing close/open events |
 | `qw.txt` | Notes on condition of Quiet Waters |
