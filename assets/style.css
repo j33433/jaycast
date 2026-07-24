@@ -687,7 +687,7 @@ body {
 }
 
 .rain-gauge path {
-  fill: color-mix(in srgb, var(--jay-soft) 28%, transparent);
+  fill: color-mix(in srgb, var(--jay-soft) 14%, transparent);
 }
 
 .day-card:hover,
