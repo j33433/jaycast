@@ -480,7 +480,7 @@ fn drainage_status(
                 quality: 1.0,
                 daylight_fraction: 1.0,
                 note: format!("{:.2} in forecast rain; open AM, PM risk", event.total_in),
-                blurb: "maybe closed PM".into(),
+                blurb: "unsure PM".into(),
                 closure_status: ClosureStatus::Possible,
             };
         }
@@ -503,7 +503,7 @@ fn drainage_status(
                 quality: 1.0,
                 daylight_fraction: 1.0,
                 note: format!("{:.2} in forecast rain; open AM, PM risk", event.total_in),
-                blurb: "maybe closed PM".into(),
+                blurb: "unsure PM".into(),
                 closure_status: ClosureStatus::Possible,
             };
         }
@@ -528,15 +528,15 @@ fn drainage_status(
                     "{:.2} in rain; open AM, PM risk",
                     rain_event.total_in
                 ),
-                blurb: "maybe closed PM".into(),
+                blurb: "unsure PM".into(),
                 closure_status: ClosureStatus::Possible,
             };
         }
         return DrainageStatus {
             quality: 0.05,
             daylight_fraction: 0.0,
-            note: format!("{:.2} in rain; maybe closed", rain_event.total_in),
-            blurb: "maybe closed".into(),
+            note: format!("{:.2} in rain; unsure", rain_event.total_in),
+            blurb: "unsure".into(),
             closure_status: ClosureStatus::Possible,
         };
     }
@@ -549,16 +549,16 @@ fn drainage_status(
         daylight_fraction,
         note: if reopen_hour <= 14.0 {
             format!(
-                "{:.2} in rain; maybe closed AM, open PM",
+                "{:.2} in rain; unsure AM, open PM",
                 rain_event.total_in
             )
         } else {
-            format!("{:.2} in rain; maybe closed", rain_event.total_in)
+            format!("{:.2} in rain; unsure", rain_event.total_in)
         },
         blurb: if reopen_hour <= 14.0 {
-            "maybe closed AM".into()
+            "unsure AM".into()
         } else {
-            "maybe closed".into()
+            "unsure".into()
         },
         closure_status: ClosureStatus::Possible,
     }
@@ -1284,7 +1284,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[1].blurb, "maybe closed AM");
+        assert_eq!(scored[1].blurb, "unsure AM");
         assert_eq!(scored[1].closure_status, ClosureStatus::Possible);
         assert_eq!(scored[2].blurb, "likely open");
         assert_eq!(scored[2].closure_status, ClosureStatus::Clear);
@@ -1307,7 +1307,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[1].blurb, "maybe closed AM");
+        assert_eq!(scored[1].blurb, "unsure AM");
         assert_eq!(scored[1].closure_status, ClosureStatus::Possible);
     }
 
@@ -1327,7 +1327,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "maybe closed PM");
+        assert_eq!(scored[0].blurb, "unsure PM");
         assert_eq!(scored[0].closure_status, ClosureStatus::Possible);
         // Morning was rideable, so score should reflect partial daylight.
         assert!(
@@ -1354,7 +1354,7 @@ mod tests {
         let p = Params::for_trail(crate::trails::Trail::Markham);
 
         let morning = score_days_as_of(&days, today, &p, Some(10));
-        assert_eq!(morning[1].blurb, "maybe closed PM");
+        assert_eq!(morning[1].blurb, "unsure PM");
         assert_eq!(morning[1].closure_status, ClosureStatus::Possible);
         let status = morning[1]
             .factors
@@ -1413,7 +1413,7 @@ mod tests {
     fn markham_trailing_trace_does_not_extend_closure() {
         // 0.185" rain at hours 19-20, then a 0.004" trace at hour 22.
         // Without the trace filter, the trace extends end_hour to 23:00,
-        // pushing reopen to 7:30 AM and falsely flagging "maybe closed AM".
+        // pushing reopen to 7:30 AM and falsely flagging "unsure AM".
         let mut rain = day("2026-07-12", 0.197, 92.0);
         rain.precip_prob_max = 49.0;
         rain.precip_prob_ride_max = 0.0;

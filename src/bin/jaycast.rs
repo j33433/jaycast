@@ -289,7 +289,7 @@ fn backtest(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         let status = match score.closure_status {
             jaycast::score::ClosureStatus::Possible => {
                 maybe_closed += 1;
-                "maybe closed"
+                "unsure"
             }
             jaycast::score::ClosureStatus::Clear => {
                 likely_open += 1;
@@ -319,7 +319,7 @@ fn backtest(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
     println!("{}", "-".repeat(60));
     println!(
-        "summary: {likely_open} likely open, {maybe_closed} maybe closed (out of {} days)",
+        "summary: {likely_open} likely open, {maybe_closed} unsure (out of {} days)",
         days.len(),
     );
 
