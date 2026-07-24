@@ -1012,9 +1012,9 @@ fn source_distance_line(
         let mut gauges = match gauge_mi.as_slice() {
             [one] => {
                 if *one < 0.1 {
-                    "rain measured at trailhead".to_string()
+                    "rain gauge at trailhead".to_string()
                 } else {
-                    format!("rain measured {one:.1} miles away")
+                    format!("rain gauge {one:.1} miles away")
                 }
             }
             many => {
@@ -1023,7 +1023,7 @@ fn source_distance_line(
                     .map(|mi| format!("{mi:.1}"))
                     .collect::<Vec<_>>()
                     .join(" and ");
-                format!("rain measured {list} miles away")
+                format!("rain gauge {list} miles away")
             }
         };
         if let Some(ts) = gauge.last_seen_ts(trail) {

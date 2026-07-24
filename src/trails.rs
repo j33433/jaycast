@@ -76,7 +76,7 @@ impl Trail {
     pub fn short_name(self) -> &'static str {
         match self {
             Self::CampMurphy => "Camp Murphy",
-            Self::Markham => "Markham",
+            Self::Markham => "Markham Park",
             Self::QuietWaters => "Quiet Waters",
         }
     }
