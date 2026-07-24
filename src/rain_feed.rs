@@ -76,9 +76,15 @@ impl GaugeRain {
     }
 
     /// Seconds since the freshest today observation for this trail, if known.
+    #[allow(dead_code)]
     pub fn last_seen_secs_ago(&self, trail: Trail, now_ts: i64) -> Option<i64> {
         let ts = *self.last_ob_ts.get(trail.slug())?;
         Some((now_ts - ts).max(0))
+    }
+
+    /// Unix timestamp of the freshest today observation for this trail, if known.
+    pub fn last_seen_ts(&self, trail: Trail) -> Option<i64> {
+        self.last_ob_ts.get(trail.slug()).copied()
     }
 }
 
@@ -202,6 +208,7 @@ fn parse_iso_timestamp(iso: &str) -> Option<i64> {
 }
 
 /// Human age for footer: "3 minutes" / "1 hour" / "2 hours".
+#[allow(dead_code)]
 pub fn format_seen_ago(secs: i64) -> String {
     let secs = secs.max(0);
     if secs < 60 {

@@ -64,6 +64,13 @@ impl WeatherModel {
             self.short().to_lowercase()
         )
     }
+
+    fn meta_domain(self) -> &'static str {
+        match self {
+            WeatherModel::GfsSeamless => "ncep_hrrr_conus",
+            WeatherModel::Ecmwf => "ecmwf_ifs",
+        }
+    }
 }
 
 /// Read saved model preference from localStorage (default ECMWF).
@@ -82,6 +89,57 @@ pub fn load_model_pref() -> WeatherModel {
 pub fn save_model_pref(model: WeatherModel) {
     if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
         let _ = storage.set_item(MODEL_PREF_KEY, model.short().to_lowercase().as_str());
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct ModelMeta {
+    last_run_initialisation_time: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct MetaCacheEntry {
+    fetched_at: i64,
+    init_time: i64,
+}
+
+pub async fn fetch_model_init_time(model: WeatherModel) -> Option<i64> {
+    let key = format!("jaycast:om:meta:{}", model.short().to_lowercase());
+
+    if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
+        if let Ok(Some(raw)) = storage.get_item(&key) {
+            if let Ok(entry) = serde_json::from_str::<MetaCacheEntry>(&raw) {
+                let now = chrono::Utc::now().timestamp();
+                if now - entry.fetched_at <= CACHE_TTL_SECS {
+                    return Some(entry.init_time);
+                }
+            }
+        }
+    }
+
+    let url = format!(
+        "https://api.open-meteo.com/data/{}/static/meta.json",
+        model.meta_domain()
+    );
+    match fetch_with_retry(&url, "Model meta").await {
+        Ok(resp) => {
+            if let Ok(meta) = resp.json::<ModelMeta>().await {
+                let now = chrono::Utc::now().timestamp();
+                let entry = MetaCacheEntry {
+                    fetched_at: now,
+                    init_time: meta.last_run_initialisation_time,
+                };
+                if let Ok(raw) = serde_json::to_string(&entry) {
+                    if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
+                        let _ = storage.set_item(&key, &raw);
+                    }
+                }
+                Some(meta.last_run_initialisation_time)
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
     }
 }
 

@@ -108,7 +108,8 @@ pub fn App() -> impl IntoView {
 
                             is_first_load.set(false);
                             gauge_rain.set(gauge);
-                            refreshed_at.set(format_weather_as_of(forecast_at));
+                            let init_time = weather::fetch_model_init_time(m).await;
+                            refreshed_at.set(format_weather_as_of(init_time, forecast_at));
                             state.set(LoadState::Ready(scored));
                         }
                         Err(e) => {
@@ -554,11 +555,7 @@ fn Hero(
             <p class="hero-updated">
                 {move || {
                     let t = refreshed_at.get();
-                    if t.is_empty() {
-                        "forecast...".to_string()
-                    } else {
-                        format!("forecast as of {t}")
-                    }
+                    if t.is_empty() { "forecast...".to_string() } else { t }
                 }}
             </p>
         </section>
@@ -954,13 +951,14 @@ fn smooth_wave_path(values: &[f64], height: impl Fn(f64) -> f64) -> String {
     path
 }
 
-/// Local clock time when forecast weather was last pulled from Open-Meteo (or cache age).
-fn format_weather_as_of(fetched_at: i64) -> String {
+/// Formatted "forecast as of" string using model init time, falling back to fetch time.
+fn format_weather_as_of(init_time: Option<i64>, fallback_fetched_at: i64) -> String {
+    let ts = init_time.unwrap_or(fallback_fetched_at);
     Local
-        .timestamp_opt(fetched_at, 0)
+        .timestamp_opt(ts, 0)
         .single()
-        .map(|t| t.format("%-I:%M %p").to_string())
-        .unwrap_or_else(|| Local::now().format("%-I:%M %p").to_string())
+        .map(|t| format!("forecast as of {}", t.format("%-I:%M %p")))
+        .unwrap_or_else(|| String::new())
 }
 
 fn format_long(d: NaiveDate) -> String {
@@ -1014,9 +1012,9 @@ fn source_distance_line(
         let mut gauges = match gauge_mi.as_slice() {
             [one] => {
                 if *one < 0.1 {
-                    "rain gauge at trailhead".to_string()
+                    "rain measured at trailhead".to_string()
                 } else {
-                    format!("rain gauge {one:.1} miles away")
+                    format!("rain measured {one:.1} miles away")
                 }
             }
             many => {
@@ -1025,16 +1023,16 @@ fn source_distance_line(
                     .map(|mi| format!("{mi:.1}"))
                     .collect::<Vec<_>>()
                     .join(" and ");
-                format!("rain gauges {list} miles away")
+                format!("rain measured {list} miles away")
             }
         };
-        if let Some(secs) = gauge.last_seen_secs_ago(trail, Local::now().timestamp()) {
-            let age = rain_feed::format_seen_ago(secs);
-            if age == "just now" {
-                gauges.push_str(" (seen just now)");
-            } else {
-                gauges.push_str(&format!(" (seen {age} ago)"));
-            }
+        if let Some(ts) = gauge.last_seen_ts(trail) {
+            let seen = Local
+                .timestamp_opt(ts, 0)
+                .single()
+                .map(|dt| dt.format("%-I:%M %p").to_string())
+                .unwrap_or_else(|| "recently".into());
+            gauges.push_str(&format!(" at {seen}"));
         }
         parts.push(gauges);
     }
