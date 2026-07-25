@@ -34,7 +34,7 @@ trunk build --release # static site in dist/
 
 Analyze a date or inclusive range with the same scorer: `cargo run --features cli --bin jaycast -- analyze markham 2026-07-08:2026-07-11 both`. The trail slug is optional and defaults to Camp Murphy; omit the date for today.
 
-Ground-truth hourly gauge rain (Xweather, server key only): `cargo run --features cli --bin jaycast -- xweather publish --out xweather.json` (see `XWEATHER.md`).
+Ground-truth hourly gauge rain (Xweather, server key only): `cargo run --features cli --bin jaycast -- xweather publish --out xweather.json` (see `doc/XWEATHER.md`).
 
 ## Score model
 
@@ -54,4 +54,4 @@ Camp Murphy uses roughly **pack 55% / weather 35% / confidence 10%**. Quiet Wate
 
 GPL-3.0-or-later (see `LICENSE`).
 
-See [CODEMAP.md](CODEMAP.md) for a file-level map of the project.
+See [doc/CODEMAP.md](CODEMAP.md) for a file-level map of the project.
