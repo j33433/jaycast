@@ -373,7 +373,13 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     };
 
     // Combine pack sub-signals (soil moisture dropped — was modeled, not sensed).
-    let pack = (0.45 * amount_q + 0.40 * timing_q + 0.15 * wet_q).clamp(0.0, 1.0);
+    // SandPack: old rain fades out naturally because timing gates the amount.
+    // MixedSurface keeps the additive blend so a high dry baseline persists.
+    let pack = if p.model == RideabilityModel::SandPack {
+        (0.85 * amount_q * timing_q + 0.15 * wet_q).clamp(0.0, 1.0)
+    } else {
+        (0.45 * amount_q + 0.40 * timing_q + 0.15 * wet_q).clamp(0.0, 1.0)
+    };
 
     let timing_note = if is_mixed {
         if muddy {
@@ -388,8 +394,13 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         match effective_hours {
             None => "no recent rain - sand may be soft".into(),
             Some(h) if h < 12.0 => format!("rain ended ~{h:.0}h ago - still settling"),
-            Some(h) if h <= 48.0 => format!("rain ended ~{h:.0}h ago - best trail conditions"),
-            Some(h) => format!("rain ended ~{h:.0}h ago - drying out"),
+            Some(h) => {
+                if timing_q >= 0.70 {
+                    format!("rain ended ~{h:.0}h ago - best trail conditions")
+                } else {
+                    format!("rain ended ~{h:.0}h ago - drying out")
+                }
+            }
         }
     };
 
@@ -887,6 +898,17 @@ fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> 
             "likely soft sand".into()
         };
     }
+    if p.model == RideabilityModel::SandPack {
+        if let Some(f) = factors.iter().find(|f| f.name == "Trail conditions") {
+            if f.note.contains("drying out") {
+                return "sand drying out".into();
+            }
+            if f.note.contains("settling") {
+                return "sand settling".into();
+            }
+            return "mixed sand".into();
+        }
+    }
     // Fall back to strongest named factor note snippet.
     factors
         .first()
@@ -1225,9 +1247,10 @@ mod tests {
                 dd.et0 = et0;
                 v.push(dd);
             }
-            // Big packing rain 3 days before ride.
-            v[1].precip_in = 1.0;
-            v[1].precip_pm_in = 1.0;
+            // Packing rain on Jul 3 (idx 2), ride day is Jul 5 (idx 4).
+            // Jul 3 is within the 48h antecedent window for Jul 5.
+            v[2].precip_in = 1.0;
+            v[2].precip_pm_in = 1.0;
             v
         };
         let today = NaiveDate::from_ymd_opt(2026, 7, 5).unwrap();
@@ -1242,6 +1265,60 @@ mod tests {
             "ET0 should change the score: sunny {:.3} vs cloudy {:.3}",
             s.score,
             c.score
+        );
+    }
+
+    #[test]
+    fn stale_rain_does_not_produce_firm_sand() {
+        // 0.76" two days before the ride, only 0.06" yesterday, dry today.
+        let mut d1 = day("2026-07-01", 0.76, 88.0);
+        d1.precip_pm_in = 0.76;
+        let mut d2 = day("2026-07-02", 0.06, 88.0);
+        d2.precip_ride_in = 0.0;
+        d2.precip_pm_in = 0.06;
+        let d3 = day("2026-07-03", 0.0, 88.0);
+        let today = NaiveDate::from_ymd_opt(2026, 7, 3).unwrap();
+        let days = vec![d1, d2, d3.clone()];
+        let scored = score_days(&days, today, &Params::default());
+        let stale = scored.iter().find(|d| d.date == today).unwrap();
+
+        // Blurb must not claim firm sand — the last meaningful rain was two days ago.
+        assert!(
+            !stale.blurb.contains("firm"),
+            "blurb should not say firm: got '{}'",
+            stale.blurb,
+        );
+        let trail_factor = stale
+            .factors
+            .iter()
+            .find(|f| f.name == "Trail conditions")
+            .unwrap();
+        assert!(
+            trail_factor.note.contains("drying out"),
+            "trail conditions should say drying out, got '{}'",
+            trail_factor.note,
+        );
+
+        // Contrast: move the 0.76" rain to yesterday — should be firm.
+        let fresh_d1 = day("2026-07-01", 0.0, 88.0);
+        let mut fresh_d2 = day("2026-07-02", 0.76, 88.0);
+        fresh_d2.precip_pm_in = 0.76;
+        let fresh = score_days(
+            &[fresh_d1, fresh_d2, d3.clone()],
+            today,
+            &Params::default(),
+        );
+        let f = fresh.iter().find(|d| d.date == today).unwrap();
+        assert!(
+            f.stars > stale.stars,
+            "fresh rain should score higher than stale: fresh {:.1} vs stale {:.1}",
+            f.stars,
+            stale.stars,
+        );
+        assert!(
+            f.blurb.contains("firm"),
+            "fresh rain should produce firm sand, got '{}'",
+            f.blurb,
         );
     }
 

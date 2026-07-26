@@ -17,8 +17,9 @@ Camp Murphy rides best after meaningful rain but before the sun bakes it back to
 powder. The model scores this with **SandPack**:
 
 - More rain always improves the pack — there is no "too much" for sand.
-- The timing peak is at **8 hours** after rain ends. After a good soaking the
-  sand is firm and fast. By roughly 3 days of sun it's back to soft.
+- The timing peak is at **18 hours** after rain ends with a linear fade to soft
+  over roughly 3 days. The overall pack quality multiplies rain amount by timing,
+  so old rain contributes less even when totals look good.
 - Sun dries this shadeless sand aggressively, so the ET0 (sunshine) forecast
   modulates the drying clock. Cloudy days keep the sand packed longer.
 - A long dry spell (7+ days with no significant rain) bottoms out the pack score
