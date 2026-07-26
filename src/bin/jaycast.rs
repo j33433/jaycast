@@ -1,12 +1,13 @@
 use std::{env, fs, process};
 
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Duration, Local, NaiveDate, Timelike};
 use jaycast::{
-    score::{score_days, DayForecast, Params},
+    score::{score_days, score_days_as_of, DayForecast, Params},
     trails::Trail,
     weather::{
         build_date_range_url, build_historical_url, DayWeather, ForecastResponse, WeatherModel,
     },
+    apply_gauge_to_days, load_gauge_from_file, GaugeRain,
 };
 
 fn main() {
@@ -31,7 +32,25 @@ fn run() -> Result<(), String> {
     }
 }
 
-fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
+fn analyze(args: impl Iterator<Item = String>) -> Result<(), String> {
+    let raw: Vec<String> = args.collect();
+    let mut gauge_path: Option<String> = None;
+    let mut filtered: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i] == "--gauge" {
+            if i + 1 >= raw.len() {
+                return Err("--gauge requires a file path".into());
+            }
+            gauge_path = Some(raw[i + 1].clone());
+            i += 2;
+        } else {
+            filtered.push(raw[i].clone());
+            i += 1;
+        }
+    }
+    let mut args = filtered.into_iter();
+
     let first = args.next();
     let (trail, first) = match first {
         Some(value) => match Trail::from_slug(&value) {
@@ -41,6 +60,7 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         None => (Trail::CampMurphy, None),
     };
     let today = Local::now().date_naive();
+    let current_hour = Local::now().hour();
     let (start, end, model) = match first {
         Some(value) if matches!(value.as_str(), "gfs" | "ecmwf" | "both") => (today, today, value),
         Some(value) => {
@@ -61,6 +81,11 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
     };
     let fetch_start = start - Duration::days(3);
     let history_end = today - Duration::days(1);
+
+    let gauge: Option<GaugeRain> = match gauge_path {
+        Some(ref path) => Some(load_gauge_from_file(path, today)?),
+        None => None,
+    };
 
     for model in models {
         let historical = (fetch_start < today)
@@ -90,6 +115,8 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
                 &historical_days,
                 today,
                 trail,
+                gauge.as_ref(),
+                current_hour,
             )?;
         }
 
@@ -111,6 +138,8 @@ fn analyze(mut args: impl Iterator<Item = String>) -> Result<(), String> {
                 &days,
                 today,
                 trail,
+                gauge.as_ref(),
+                current_hour,
             )?;
         }
     }
@@ -147,8 +176,17 @@ fn print_range_analysis(
     days: &[DayWeather],
     today: NaiveDate,
     trail: Trail,
+    gauge: Option<&GaugeRain>,
+    current_hour: u32,
 ) -> Result<(), String> {
-    let scores = score_days(days, today, &Params::for_trail(trail));
+    let mut days = days.to_vec();
+    if let Some(g) = gauge {
+        apply_gauge_to_days(&mut days, g, trail, today, current_hour);
+    }
+    let scored = match gauge {
+        Some(_) => score_days_as_of(&days, today, &Params::for_trail(trail), Some(current_hour)),
+        None => score_days(&days, today, &Params::for_trail(trail)),
+    };
 
     let mut date = start;
     loop {
@@ -156,7 +194,7 @@ fn print_range_analysis(
             .iter()
             .find(|day| day.date == date)
             .ok_or_else(|| format!("{source} returned no data for {date}"))?;
-        let score = scores
+        let score = scored
             .iter()
             .find(|day| day.date == date)
             .ok_or_else(|| format!("{source} could not score {date}"))?;
@@ -328,7 +366,7 @@ fn backtest(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
 fn print_help() {
     eprintln!(
-        "Usage:\n  jaycast analyze [camp-murphy|markham|quiet-waters] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both]\n  jaycast backtest <fixture.json> [camp-murphy|markham|quiet-waters]\n  jaycast xweather publish --out <PATH> [--days N] [--cache PATH]\n  jaycast xweather dump [--days N] [--cache PATH]\n  jaycast xweather rescan [trail] [--limit N] [--days N] [--candidates N]"
+        "Usage:\n  jaycast analyze [trail] [YYYY-MM-DD[:YYYY-MM-DD]] [gfs|ecmwf|both] [--gauge rain.json]\n  jaycast backtest <fixture.json> [camp-murphy|markham|quiet-waters]\n  jaycast xweather publish --out <PATH> [--days N] [--cache PATH]\n  jaycast xweather dump [--days N] [--cache PATH]\n  jaycast xweather rescan [trail] [--limit N] [--days N] [--candidates N]"
     );
 }
 

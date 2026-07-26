@@ -19,12 +19,17 @@ Scores a date or inclusive range against GFS, ECMWF, or both. Fetches historical
 archive for past days and forecast for future ones.
 
 ```text
-jaycast analyze [trail] [date|start:end] [gfs|ecmwf|both]
+jaycast analyze [trail] [date|start:end] [gfs|ecmwf|both] [--gauge rain.json]
 ```
 
 Defaults: trail=Camp Murphy, date=today, model=both.
 
 **Trail slugs:** `camp-murphy` (or omit), `markham`, `quiet-waters`.
+
+**`--gauge` flag:** Optionally provide an Xweather ground-truth rain.json feed
+(see `xweather publish`). When present, gauge tips replace model precip for
+completed hours so scores match the web UI. For today, only hours before the
+current wall-clock hour are applied.
 
 **Examples:**
 
@@ -43,6 +48,9 @@ cargo run --features cli --bin jaycast -- analyze quiet-waters 2026-07-22:2026-0
 
 # Past week at Markham, both models
 cargo run --features cli --bin jaycast -- analyze markham 2026-07-17:2026-07-24 both
+
+# With ground-truth gauge rain (matches web UI scores)
+cargo run --features cli --bin jaycast -- analyze camp-murphy 2026-07-25:2026-07-26 both --gauge assets/rain.json
 ```
 
 **Output (per day):**
@@ -188,6 +196,7 @@ Run:                cargo run --features cli --bin jaycast -- <args>
 Analyze today:      jaycast analyze
 Analyze date:       jaycast analyze markham 2026-07-22 ecmwf
 Analyze range:      jaycast analyze quiet-waters 2026-07-22:2026-07-23 both
+Analyze w/ gauge:    jaycast analyze camp-murphy 2026-07-25:2026-07-26 both --gauge rain.json
 Backtest fixture:   jaycast backtest tests/fixtures/markham-2mo.json markham
 Publish rain feed:  jaycast xweather publish --out rain.json
 Dump rain feed:     jaycast xweather dump

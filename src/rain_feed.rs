@@ -88,6 +88,16 @@ impl GaugeRain {
     }
 }
 
+/// Load gauge rain data from a rain.json file on disk (native CLI only).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load_gauge_from_file(path: &str, today: NaiveDate) -> Result<GaugeRain, String> {
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| format!("could not read {path:?}: {e}"))?;
+    let file: FeedFile = serde_json::from_str(&raw)
+        .map_err(|e| format!("could not parse {path:?}: {e}"))?;
+    Ok(index_feed(file, today))
+}
+
 #[derive(Debug, Deserialize)]
 struct FeedFile {
     trails: HashMap<String, TrailBlock>,
