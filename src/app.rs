@@ -1,6 +1,7 @@
 use chrono::{Duration, Local, NaiveDate, Timelike, TimeZone};
 use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use web_sys::window;
 
 use crate::rain_feed::{self, GaugeRain};
 use crate::score::{score_color, score_days_as_of, DayForecast, Params};
@@ -9,6 +10,34 @@ use crate::theme::{
 };
 use crate::trails::{self, Trail};
 use crate::weather::{self, WeatherModel, VIEW_DAYS};
+
+const SELECTED_KEY_PREFIX: &str = "jaycast:selected";
+
+fn load_selected_pref(trail: Trail) -> Option<NaiveDate> {
+    window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|storage| {
+            storage
+                .get_item(&format!("{SELECTED_KEY_PREFIX}:{}", trail.slug()))
+                .ok()
+                .flatten()
+        })
+        .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
+}
+
+fn save_selected_pref(trail: Trail, date: Option<NaiveDate>) {
+    if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
+        let key = format!("{SELECTED_KEY_PREFIX}:{}", trail.slug());
+        match date {
+            Some(d) => {
+                let _ = storage.set_item(&key, &d.format("%Y-%m-%d").to_string());
+            }
+            None => {
+                let _ = storage.remove_item(&key);
+            }
+        }
+    }
+}
 
 #[derive(Clone)]
 enum LoadState {
@@ -100,7 +129,14 @@ pub fn App() -> impl IntoView {
                             }
 
                             let prev_sel = selected.get_untracked();
-                            if prev_sel.is_some()
+                            if first {
+                                let saved = load_selected_pref(t);
+                                if let Some(date) = saved {
+                                    if scored.iter().any(|d| d.date == date) {
+                                        selected.set(Some(date));
+                                    }
+                                }
+                            } else if prev_sel.is_some()
                                 && !scored.iter().any(|d| Some(d.date) == prev_sel)
                             {
                                 selected.set(None);
@@ -167,6 +203,7 @@ pub fn App() -> impl IntoView {
 
             trails::save_trail_pref(new_trail);
             trails::update_trail_url(new_trail);
+            save_selected_pref(trail.get_untracked(), None);
             trail.set(new_trail);
             selected.set(None);
             view_start.set(0);
@@ -711,8 +748,10 @@ fn Timeline(
                                     on:click=move |_| {
                                         if selected.get() == Some(date) {
                                             selected.set(None);
+                                            save_selected_pref(trail.get_untracked(), None);
                                         } else {
                                             selected.set(Some(date));
+                                            save_selected_pref(trail.get_untracked(), Some(date));
                                         }
                                     }
                                     ></button>
