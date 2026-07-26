@@ -747,6 +747,38 @@ fn Timeline(
                                             </svg>
                                         }
                                     })}
+                                    <div class="hourly-ticks" aria-hidden="true">
+                                        {(0u32..24).map(|h| {
+                                            let left = format!("{:.2}%", h as f64 * 100.0 / 24.0);
+                                            let tall = h % 3 == 0;
+                                            let cls = if tall { "htick tall" } else { "htick" };
+                                            let label = match h {
+                                                3 => Some("3a"),
+                                                6 => Some("6a"),
+                                                9 => Some("9a"),
+                                                12 => Some("12p"),
+                                                15 => Some("3p"),
+                                                18 => Some("6p"),
+                                                21 => Some("9p"),
+                                                _ => None,
+                                            };
+                                            view! {
+                                                <span class=cls style=format!("left:{left}")></span>
+                                                {label.map(|l| view! {
+                                                    <span class="hlabel" style=format!("left:{left}")>{l}</span>
+                                                })}
+                                            }
+                                        }).collect_view()}
+                                        {if is_today {
+                                            let now = Local::now();
+                                            let pct = (now.hour() as f64 + now.minute() as f64 / 60.0) / 24.0 * 100.0;
+                                            Some(view! {
+                                                <span class="now-marker" style=format!("left:{pct:.2}%")></span>
+                                            })
+                                        } else {
+                                            None
+                                        }}
+                                    </div>
                                     <div class="date">
                                         {date_s}
                                         <span class="dow">{dow}</span>

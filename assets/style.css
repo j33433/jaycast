@@ -647,7 +647,7 @@ body {
   outline-offset: -3px;
 }
 
-.day-card > :not(.day-card-select, .rain-wave, .cloud-wave, .rain-gauge) {
+.day-card > :not(.day-card-select, .rain-wave, .cloud-wave, .rain-gauge, .hourly-ticks) {
   position: relative;
   z-index: 2;
   pointer-events: none;
@@ -688,6 +688,58 @@ body {
 
 .rain-gauge path {
   fill: color-mix(in srgb, var(--jay-soft) 14%, transparent);
+}
+
+/* Hourly tick marks at the bottom of the card — only when unfurled. */
+.hourly-ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  height: 1.15rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.day-card.selected .hourly-ticks {
+  opacity: 1;
+}
+
+.hourly-ticks .htick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 0.28rem;
+  margin-left: -0.5px;
+  background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+
+.hourly-ticks .htick.tall {
+  height: 0.45rem;
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+.hourly-ticks .hlabel {
+  position: absolute;
+  bottom: 0.05rem;
+  transform: translateX(-100%);
+  padding-right: 0.2rem;
+  font-size: 0.55rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--text-muted) 65%, transparent);
+  white-space: nowrap;
+}
+
+.hourly-ticks .now-marker {
+  position: absolute;
+  height: 60%;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: color-mix(in srgb, var(--bad) 55%, transparent);
+  border-radius: 1px;
 }
 
 .day-card:hover,
