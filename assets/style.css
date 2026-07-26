@@ -903,9 +903,19 @@ body {
 }
 
 .detail .score-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
   font-size: 0.85rem;
   color: var(--text-muted);
   margin: 0 0 0.85rem;
+}
+
+.detail .detail-meta {
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .factors {

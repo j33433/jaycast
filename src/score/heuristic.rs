@@ -421,22 +421,22 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
 
     let wet_note = if day.precip_ride_in > p.ride_day_precip_soft {
         format!(
-            "{:.2} in rain from 8 AM-noon ({:.0}% chance) — likely riding wet",
+            "{:.2}\" AM rain, {:.0}% chance",
             day.precip_ride_in, day.precip_prob_ride_max
         )
     } else if day.precip_pm_in > p.ride_day_precip_soft {
         format!(
-            "{:.2} in rain noon-sundown — dry 8 AM-noon window ({:.0}% morning chance)",
+            "dry AM, {:.2}\" PM rain, {:.0}% chance",
             day.precip_pm_in, day.precip_prob_ride_max
         )
     } else if day.precip_prob_ride_max >= 40.0 {
         format!(
-            "{:.0}% rain chance 8 AM-noon, mostly dry forecast",
+            "{:.0}% chance AM",
             day.precip_prob_ride_max
         )
     } else {
         format!(
-            "dry ride window ({:.0}% chance 8 AM-noon)",
+            "dry AM, {:.0}% chance",
             day.precip_prob_ride_max
         )
     };

@@ -848,15 +848,32 @@ fn day_detail_view(d: DayForecast) -> impl IntoView {
         Some(t) => format!("{rain} · {t}"),
         None => rain,
     };
+
+    let sky = d.factors.iter().find(|f| f.name == "Sky");
+
+    let ride_clouds_avg: f64 = d.cloud_3h_pct[2..5].iter().sum::<f64>() / 3.0;
+    let cloud_word = match ride_clouds_avg as u32 {
+        0..=19 => "sunny",
+        20..=39 => "mostly sunny",
+        40..=59 => "partly cloudy",
+        60..=79 => "cloudy",
+        _ => "overcast",
+    };
+
+    let sky_pct = sky.map_or("0%".into(), |f| format!("{:+.0}%", f.contribution * 50.0));
+    let meta = format!("{cloud_word} {sky_pct}");
+
     let tint = day_card_style(d.score, d.am_vs_avg_f, d.pm_vs_avg_f);
     view! {
         <section class="detail" style=tint>
             <p class="score-line">
-                {score_line}
+                <span>{score_line}</span>
+                <span class="detail-meta">{meta}</span>
             </p>
             <ul class="factors">
                 {d.factors
                     .into_iter()
+                    .filter(|f| f.name != "Sky" && f.name != "Forecast reliability")
                     .map(|f| {
                         let cls = if f.contribution > 0.08 {
                             "contrib pos"
