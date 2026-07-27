@@ -494,15 +494,23 @@ body {
 }
 
 .weekend-toggle:hover {
-  border-color: var(--jay);
+  border-color: color-mix(in srgb, var(--jay) 55%, var(--border));
   color: var(--jay);
-  background: color-mix(in srgb, var(--jay) 12%, transparent);
 }
 
 .weekend-toggle.active {
   border-color: var(--jay);
   color: var(--jay);
   background: color-mix(in srgb, var(--jay) 20%, transparent);
+}
+
+.weekend-toggle.active:hover {
+  background: color-mix(in srgb, var(--jay) 28%, transparent);
+}
+
+.weekend-toggle:focus-visible {
+  outline: 2px solid var(--jay);
+  outline-offset: 2px;
 }
 
 .weekend-icon {
