@@ -1007,7 +1007,6 @@ fn WeekendWarriorView(
     trail: RwSignal<Trail>,
 ) -> impl IntoView {
     let _ = model;
-    const GRID_DAYS: usize = 4; // today + next 3
 
     view! {
         <div class="weekend-warrior">
@@ -1024,150 +1023,162 @@ fn WeekendWarriorView(
                     let all = multi_days.get();
                     if all.is_empty() {
                         view! {
-                            <div class="status">
-                                <p>"No trail data loaded."</p>
-                            </div>
+                            <div class="status"><p>"No trail data loaded."</p></div>
                         }.into_any()
                     } else {
-                        // Gather today from the first trail's forecast.
-                        let today = all
-                            .first()
+                        let today = all.first()
                             .and_then(|(_, days)| days.iter().find(|d| d.is_today).map(|d| d.date))
                             .unwrap_or_else(|| Local::now().date_naive());
-
-                        // Collect unique dates across all trails for the header row.
-                        let dates: Vec<NaiveDate> = (0..GRID_DAYS)
-                            .map(|i| today + Duration::days(i as i64))
-                            .collect();
-
-                        // Build a map: trail -> date -> DayForecast
-                        let mut map: HashMap<Trail, HashMap<NaiveDate, DayForecast>> = HashMap::new();
-                        for (t, days) in &all {
-                            let m: HashMap<NaiveDate, DayForecast> = days
-                                .iter()
-                                .filter(|d| dates.contains(&d.date))
-                                .map(|d| (d.date, d.clone()))
-                                .collect();
-                            map.insert(*t, m);
-                        }
-
-                        // Best bet per column
-                        let best_per_day: HashMap<NaiveDate, Trail> = dates
-                            .iter()
-                            .filter_map(|date| {
-                                let mut best: Option<(Trail, f64)> = None;
-                                for t in Trail::ALL {
-                                    if let Some(d) = map.get(&t).and_then(|m| m.get(date)) {
-                                        if !d.is_past && d.date == *date {
-                                            match best {
-                                                Some((_, s)) if d.score > s => best = Some((t, d.score)),
-                                                None => best = Some((t, d.score)),
-                                                _ => {}
-                                            }
-                                        }
-                                    }
-                                }
-                                best.map(|(t, _)| (*date, t))
-                            })
-                            .collect();
-
-                        let header_dates = dates.clone();
-                        let header_today = today;
-
-                        view! {
-                            <div class="weekend-grid">
-                                // Header row: day names
-                                <div class="weekend-header-row">
-                                    <div class="weekend-corner"></div>
-                                    {header_dates.iter().map(|date| {
-                                        let is_today = *date == header_today;
-                                        let dow = if is_today {
-                                            "Today".to_string()
-                                        } else {
-                                            format_dow(*date)
-                                        };
-                                        let short = format_short(*date);
-                                        view! {
-                                            <div class=move || {
-                                                if is_today { "weekend-col-header today" }
-                                                else { "weekend-col-header" }
-                                            }>
-                                                <span class="weekend-dow">{dow}</span>
-                                                <span class="weekend-date">{short}</span>
-                                            </div>
-                                        }
-                                    }).collect_view()}
-                                </div>
-                                // Trail rows
-                                {Trail::ALL.iter().map(|t| {
-                                    let icon = t.icon_src();
-                                    let name = t.short_name();
-                                    let is_selected = move || trail.get() == *t;
-                                    let row_dates = dates.clone();
-                                    let row_map = map.clone();
-                                    let row_best = best_per_day.clone();
-                                    let row_trail = *t;
-                                    view! {
-                                        <div class=move || {
-                                            if is_selected() { "weekend-row selected" }
-                                            else { "weekend-row" }
-                                        }>
-                                            <div class="weekend-trail-label">
-                                                <img class="weekend-trail-icon" src=icon alt=""/>
-                                                <span>{name}</span>
-                                            </div>
-                                            {row_dates.iter().map(|date| {
-                                                let cell = row_map
-                                                    .get(&row_trail)
-                                                    .and_then(|m| m.get(date));
-                                                let is_best =
-                                                    row_best.get(date).copied() == Some(row_trail);
-                                                match cell {
-                                                    Some(d) => {
-                                                        let stars = stars_str(d.stars);
-                                                        let blurb = d.blurb.clone();
-                                                        let tint = day_card_style(
-                                                            d.score,
-                                                            d.am_vs_avg_f,
-                                                            d.pm_vs_avg_f,
-                                                        );
-                                                        let is_today = d.is_today;
-                                                        view! {
-                                                            <div class=move || {
-                                                                let mut c = String::from("weekend-cell");
-                                                                if is_today { c.push_str(" today"); }
-                                                                if is_best { c.push_str(" best-bet"); }
-                                                                c
-                                                            } style=tint>
-                                                                {if is_best {
-                                                                    view! {
-                                                                        <span class="best-bet-badge">"Best Bet"</span>
-                                                                    }.into_any()
-                                                                } else {
-                                                                    ().into_any()
-                                                                }}
-                                                                <div class="weekend-stars">{stars}</div>
-                                                                <div class="weekend-blurb">{blurb}</div>
-                                                            </div>
-                                                        }.into_any()
-                                                    }
-                                                    None => view! {
-                                                        <div class="weekend-cell empty">
-                                                            <span class="weekend-na">"-"</span>
-                                                        </div>
-                                                    }.into_any(),
-                                                }
-                                            }).collect_view()}
-                                        </div>
-                                    }
-                                }).collect_view()}
-                            </div>
-                        }.into_any()
+                        let grid = WeekendGridData::build(&all, today);
+                        view! { <WeekendGrid grid=grid today=today trail=trail /> }.into_any()
                     }
                 }
             }}
         </div>
     }
+}
+
+struct WeekendGridData {
+    dates: Vec<NaiveDate>,
+    map: HashMap<Trail, HashMap<NaiveDate, DayForecast>>,
+    best_per_day: HashMap<NaiveDate, Trail>,
+}
+
+impl WeekendGridData {
+    const GRID_DAYS: usize = 4;
+
+    fn build(all: &[(Trail, Vec<DayForecast>)], today: NaiveDate) -> Self {
+        let dates: Vec<NaiveDate> = (0..Self::GRID_DAYS)
+            .map(|i| today + Duration::days(i as i64))
+            .collect();
+
+        let mut map: HashMap<Trail, HashMap<NaiveDate, DayForecast>> = HashMap::new();
+        for (t, days) in all {
+            let m: HashMap<NaiveDate, DayForecast> = days
+                .iter()
+                .filter(|d| dates.contains(&d.date))
+                .map(|d| (d.date, d.clone()))
+                .collect();
+            map.insert(*t, m);
+        }
+
+        let best_per_day: HashMap<NaiveDate, Trail> = dates
+            .iter()
+            .filter_map(|date| {
+                Trail::ALL
+                    .iter()
+                    .filter_map(|t| {
+                        map.get(t)
+                            .and_then(|m| m.get(date))
+                            .filter(|d| !d.is_past)
+                            .map(|d| (*t, d.score))
+                    })
+                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|(t, _)| (*date, t))
+            })
+            .collect();
+
+        Self { dates, map, best_per_day }
+    }
+}
+
+#[component]
+fn WeekendGrid(
+    grid: WeekendGridData,
+    today: NaiveDate,
+    trail: RwSignal<Trail>,
+) -> impl IntoView {
+    view! {
+        <div class="weekend-grid">
+            <WeekendHeader dates=grid.dates.clone() today=today />
+            {Trail::ALL.iter().map(|t| {
+                let days = grid.map.get(t).cloned().unwrap_or_default();
+                let best = grid.best_per_day.clone();
+                view! {
+                    <WeekendRow
+                        trail=*t
+                        dates=grid.dates.clone()
+                        days=days
+                        best_per_day=best
+                        selected=move || trail.get() == *t
+                    />
+                }
+            }).collect_view()}
+        </div>
+    }
+}
+
+#[component]
+fn WeekendHeader(dates: Vec<NaiveDate>, today: NaiveDate) -> impl IntoView {
+    view! {
+        <div class="weekend-header-row">
+            <div class="weekend-corner"></div>
+            {dates.iter().map(|date| {
+                let is_today = *date == today;
+                let dow = if is_today { "Today".to_string() } else { format_dow(*date) };
+                let short = format_short(*date);
+                view! {
+                    <div class=if is_today { "weekend-col-header today" } else { "weekend-col-header" }>
+                        <span class="weekend-dow">{dow}</span>
+                        <span class="weekend-date">{short}</span>
+                    </div>
+                }
+            }).collect_view()}
+        </div>
+    }
+}
+
+#[component]
+fn WeekendRow(
+    trail: Trail,
+    dates: Vec<NaiveDate>,
+    days: HashMap<NaiveDate, DayForecast>,
+    best_per_day: HashMap<NaiveDate, Trail>,
+    selected: impl Fn() -> bool + Send + 'static,
+) -> impl IntoView {
+    view! {
+        <div class=move || if selected() { "weekend-row selected" } else { "weekend-row" }>
+            <div class="weekend-trail-label">
+                <img class="weekend-trail-icon" src=trail.icon_src() alt=""/>
+                <span>{trail.short_name()}</span>
+            </div>
+            {dates.iter().map(|date| {
+                let cell = days.get(date);
+                let is_best = best_per_day.get(date).copied() == Some(trail);
+                render_weekend_cell(cell, is_best)
+            }).collect_view()}
+        </div>
+    }
+}
+
+fn render_weekend_cell(cell: Option<&DayForecast>, is_best: bool) -> impl IntoView {
+    let Some(d) = cell else {
+        return view! {
+            <div class="weekend-cell empty"><span class="weekend-na">"-"</span></div>
+        }.into_any();
+    };
+
+    let stars = stars_str(d.stars);
+    let blurb = d.blurb.clone();
+    let tint = day_card_style(d.score, d.am_vs_avg_f, d.pm_vs_avg_f);
+    let is_today = d.is_today;
+
+    view! {
+        <div class=move || {
+            let mut c = String::from("weekend-cell");
+            if is_today { c.push_str(" today"); }
+            if is_best { c.push_str(" best-bet"); }
+            c
+        } style=tint>
+            {if is_best {
+                view! { <span class="best-bet-badge">"Best Bet"</span> }.into_any()
+            } else {
+                ().into_any()
+            }}
+            <div class="weekend-stars">{stars}</div>
+            <div class="weekend-blurb">{blurb}</div>
+        </div>
+    }.into_any()
 }
 
 fn day_detail_view(d: DayForecast) -> impl IntoView {
