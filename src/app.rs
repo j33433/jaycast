@@ -515,13 +515,27 @@ fn ReadyView(
     let on_select_day = {
         let weekend_warrior = weekend_warrior;
         let on_select_trail = on_select_trail.clone();
+        let trail = trail;
+        let selected = selected;
+        let view_start = view_start;
+        let days = days_nav.clone();
         Callback::new(move |(t, date): (Trail, NaiveDate)| {
             weekend_warrior.set(false);
             save_weekend_pref(false);
-            // Save selection for the new trail before switch_trail clears
-            // the old trail's key. load() will restore it via is_first_load.
-            save_selected_pref(t, Some(date));
-            on_select_trail.run(t);
+            if trail.get_untracked() == t {
+                // Same trail — no switch_trail needed. Just select the day.
+                selected.set(Some(date));
+                save_selected_pref(t, Some(date));
+                let today_idx = days.iter().position(|d| d.is_today).unwrap_or(0);
+                let offset = (date - days[today_idx].date).num_days();
+                let idx = (today_idx as i64 + offset).max(0) as usize;
+                view_start.set(idx.saturating_sub(1));
+            } else {
+                // Save selection for the new trail before switch_trail clears
+                // the old trail's key. load() will restore it via is_first_load.
+                save_selected_pref(t, Some(date));
+                on_select_trail.run(t);
+            }
         })
     };
 
