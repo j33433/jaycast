@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{Duration, Local, NaiveDate, Timelike, TimeZone};
 use leptos::prelude::*;
 use wasm_bindgen_futures::spawn_local;
@@ -61,6 +63,9 @@ pub fn App() -> impl IntoView {
     let gauge_rain = RwSignal::new(GaugeRain::default());
 
     let is_first_load = RwSignal::new(true);
+    let weekend_warrior = RwSignal::new(false);
+    let multi_days = RwSignal::new(Vec::<(Trail, Vec<DayForecast>)>::new());
+    let multi_loading = RwSignal::new(false);
 
     Effect::new(move |_| {
         let t = theme.get();
@@ -162,6 +167,64 @@ pub fn App() -> impl IntoView {
                 }
             }
         });
+    };
+
+    let load_weekend = {
+        let model = model;
+        let multi_days = multi_days;
+        let multi_loading = multi_loading;
+        move || {
+            let m = model.get_untracked();
+            multi_loading.set(true);
+            spawn_local(async move {
+                let today = Local::now().date_naive();
+                let current_hour = Local::now().hour();
+                let history_start = today - Duration::days(weather::PAST_DAYS.into());
+                let history_end = today - Duration::days(1);
+                let gauge = rain_feed::fetch_gauge_rain(today).await;
+                let mut results = Vec::with_capacity(Trail::ALL.len());
+                for t in Trail::ALL {
+                    let fc_result = weather::fetch_forecast(m, t).await;
+                    let hist_result = weather::fetch_historical_analysis(m, history_start, history_end, t).await;
+                    match (fc_result, hist_result) {
+                        (Ok((fc, _)), Ok((hist, _))) => {
+                            let mut days = weather::combine_history_and_forecast(
+                                hist.days(),
+                                fc.days(),
+                                today,
+                            );
+                            rain_feed::apply_gauge_to_days(
+                                &mut days,
+                                &gauge,
+                                t,
+                                today,
+                                current_hour,
+                            );
+                            let scored = score_days_as_of(
+                                &days,
+                                today,
+                                &Params::for_trail(t),
+                                Some(current_hour),
+                            );
+                            results.push((t, scored));
+                        }
+                        (Ok((fc, _)), Err(_)) => {
+                            let days = fc.days();
+                            let scored = score_days_as_of(
+                                &days,
+                                today,
+                                &Params::for_trail(t),
+                                Some(current_hour),
+                            );
+                            results.push((t, scored));
+                        }
+                        _ => {}
+                    }
+                }
+                multi_days.set(results);
+                multi_loading.set(false);
+            });
+        }
     };
 
     Effect::new(move |_| {
@@ -277,7 +340,18 @@ pub fn App() -> impl IntoView {
                         grid_lon=grid_lon
                         theme=theme
                         gauge_rain=gauge_rain
+                        weekend_warrior=weekend_warrior
+                        multi_days=multi_days
+                        multi_loading=multi_loading
                         on_switch=Callback::new(switch_model)
+                        on_toggle_weekend=Callback::new(move |_| {
+                            let was = weekend_warrior.get_untracked();
+                            let next = !was;
+                            weekend_warrior.set(next);
+                            if next {
+                                load_weekend();
+                            }
+                        })
                     />
                 }.into_any(),
             }}
@@ -392,7 +466,11 @@ fn ReadyView(
     grid_lon: RwSignal<f64>,
     theme: RwSignal<Theme>,
     gauge_rain: RwSignal<GaugeRain>,
+    weekend_warrior: RwSignal<bool>,
+    multi_days: RwSignal<Vec<(Trail, Vec<DayForecast>)>>,
+    multi_loading: RwSignal<bool>,
     on_switch: Callback<WeatherModel>,
+    on_toggle_weekend: Callback<()>,
 ) -> impl IntoView {
     let days_hero = days.clone();
     let days_nav = days.clone();
@@ -404,16 +482,33 @@ fn ReadyView(
             refreshed_at=refreshed_at
             model=model
             theme=theme
+            weekend_warrior=weekend_warrior
             on_switch=on_switch
+            on_toggle_weekend=on_toggle_weekend
         />
-        <TimelineNav days=days_nav view_start=view_start selected=selected />
-        <Timeline
-            days=days_list
-            view_start=view_start
-            selected=selected
-            trail=trail
-            gauge_rain=gauge_rain
-        />
+        {move || {
+            if weekend_warrior.get() {
+                view! {
+                    <WeekendWarriorView
+                        model=model
+                        multi_days=multi_days
+                        multi_loading=multi_loading
+                        trail=trail
+                    />
+                }.into_any()
+            } else {
+                view! {
+                    <TimelineNav days=days_nav.clone() view_start=view_start selected=selected />
+                    <Timeline
+                        days=days_list.clone()
+                        view_start=view_start
+                        selected=selected
+                        trail=trail
+                        gauge_rain=gauge_rain
+                    />
+                }.into_any()
+            }
+        }}
         <footer class="footer">
             <p>
                 {move || format!(
@@ -471,7 +566,9 @@ fn Hero(
     refreshed_at: RwSignal<String>,
     model: RwSignal<WeatherModel>,
     theme: RwSignal<Theme>,
+    weekend_warrior: RwSignal<bool>,
     on_switch: Callback<WeatherModel>,
+    on_toggle_weekend: Callback<()>,
 ) -> impl IntoView {
     let best = days.iter().find(|d| d.best).cloned();
     let day_name = best
@@ -569,6 +666,26 @@ fn Hero(
                                     }.into_any()
                                 }
                             }}
+                        </button>
+                        <button
+                            type="button"
+                            class=move || {
+                                if weekend_warrior.get() {
+                                    "weekend-toggle active"
+                                } else {
+                                    "weekend-toggle"
+                                }
+                            }
+                            aria-label="Weekend warrior comparison grid"
+                            title="Compare all trails"
+                            on:click=move |_| on_toggle_weekend.run(())
+                        >
+                            <svg class="weekend-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor"/>
+                                <rect x="14" y="3" width="7" height="7" rx="1" fill="currentColor"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1" fill="currentColor"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1" fill="currentColor"/>
+                            </svg>
                         </button>
                     </div>
                 </div>
@@ -876,6 +993,178 @@ fn Timeline(
                         }
                     })
                     .collect_view()
+            }}
+        </div>
+    }
+}
+
+/// Compact multi-trail comparison grid: today + next 3 days × all 3 trails.
+#[component]
+fn WeekendWarriorView(
+    model: RwSignal<WeatherModel>,
+    multi_days: RwSignal<Vec<(Trail, Vec<DayForecast>)>>,
+    multi_loading: RwSignal<bool>,
+    trail: RwSignal<Trail>,
+) -> impl IntoView {
+    let _ = model;
+    const GRID_DAYS: usize = 4; // today + next 3
+
+    view! {
+        <div class="weekend-warrior">
+            {move || {
+                if multi_loading.get() {
+                    view! {
+                        <div class="status">
+                            <p>"Crunching trail comparisons..."</p>
+                            <div class="skeleton skeleton-card"></div>
+                            <div class="skeleton skeleton-card"></div>
+                        </div>
+                    }.into_any()
+                } else {
+                    let all = multi_days.get();
+                    if all.is_empty() {
+                        view! {
+                            <div class="status">
+                                <p>"No trail data loaded."</p>
+                            </div>
+                        }.into_any()
+                    } else {
+                        // Gather today from the first trail's forecast.
+                        let today = all
+                            .first()
+                            .and_then(|(_, days)| days.iter().find(|d| d.is_today).map(|d| d.date))
+                            .unwrap_or_else(|| Local::now().date_naive());
+
+                        // Collect unique dates across all trails for the header row.
+                        let dates: Vec<NaiveDate> = (0..GRID_DAYS)
+                            .map(|i| today + Duration::days(i as i64))
+                            .collect();
+
+                        // Build a map: trail -> date -> DayForecast
+                        let mut map: HashMap<Trail, HashMap<NaiveDate, DayForecast>> = HashMap::new();
+                        for (t, days) in &all {
+                            let m: HashMap<NaiveDate, DayForecast> = days
+                                .iter()
+                                .filter(|d| dates.contains(&d.date))
+                                .map(|d| (d.date, d.clone()))
+                                .collect();
+                            map.insert(*t, m);
+                        }
+
+                        // Best bet per column
+                        let best_per_day: HashMap<NaiveDate, Trail> = dates
+                            .iter()
+                            .filter_map(|date| {
+                                let mut best: Option<(Trail, f64)> = None;
+                                for t in Trail::ALL {
+                                    if let Some(d) = map.get(&t).and_then(|m| m.get(date)) {
+                                        if !d.is_past && d.date == *date {
+                                            match best {
+                                                Some((_, s)) if d.score > s => best = Some((t, d.score)),
+                                                None => best = Some((t, d.score)),
+                                                _ => {}
+                                            }
+                                        }
+                                    }
+                                }
+                                best.map(|(t, _)| (*date, t))
+                            })
+                            .collect();
+
+                        let header_dates = dates.clone();
+                        let header_today = today;
+
+                        view! {
+                            <div class="weekend-grid">
+                                // Header row: day names
+                                <div class="weekend-header-row">
+                                    <div class="weekend-corner"></div>
+                                    {header_dates.iter().map(|date| {
+                                        let is_today = *date == header_today;
+                                        let dow = if is_today {
+                                            "Today".to_string()
+                                        } else {
+                                            format_dow(*date)
+                                        };
+                                        let short = format_short(*date);
+                                        view! {
+                                            <div class=move || {
+                                                if is_today { "weekend-col-header today" }
+                                                else { "weekend-col-header" }
+                                            }>
+                                                <span class="weekend-dow">{dow}</span>
+                                                <span class="weekend-date">{short}</span>
+                                            </div>
+                                        }
+                                    }).collect_view()}
+                                </div>
+                                // Trail rows
+                                {Trail::ALL.iter().map(|t| {
+                                    let icon = t.icon_src();
+                                    let name = t.short_name();
+                                    let is_selected = move || trail.get() == *t;
+                                    let row_dates = dates.clone();
+                                    let row_map = map.clone();
+                                    let row_best = best_per_day.clone();
+                                    let row_trail = *t;
+                                    view! {
+                                        <div class=move || {
+                                            if is_selected() { "weekend-row selected" }
+                                            else { "weekend-row" }
+                                        }>
+                                            <div class="weekend-trail-label">
+                                                <img class="weekend-trail-icon" src=icon alt=""/>
+                                                <span>{name}</span>
+                                            </div>
+                                            {row_dates.iter().map(|date| {
+                                                let cell = row_map
+                                                    .get(&row_trail)
+                                                    .and_then(|m| m.get(date));
+                                                let is_best =
+                                                    row_best.get(date).copied() == Some(row_trail);
+                                                match cell {
+                                                    Some(d) => {
+                                                        let stars = stars_str(d.stars);
+                                                        let blurb = d.blurb.clone();
+                                                        let tint = day_card_style(
+                                                            d.score,
+                                                            d.am_vs_avg_f,
+                                                            d.pm_vs_avg_f,
+                                                        );
+                                                        let is_today = d.is_today;
+                                                        view! {
+                                                            <div class=move || {
+                                                                let mut c = String::from("weekend-cell");
+                                                                if is_today { c.push_str(" today"); }
+                                                                if is_best { c.push_str(" best-bet"); }
+                                                                c
+                                                            } style=tint>
+                                                                {if is_best {
+                                                                    view! {
+                                                                        <span class="best-bet-badge">"Best Bet"</span>
+                                                                    }.into_any()
+                                                                } else {
+                                                                    ().into_any()
+                                                                }}
+                                                                <div class="weekend-stars">{stars}</div>
+                                                                <div class="weekend-blurb">{blurb}</div>
+                                                            </div>
+                                                        }.into_any()
+                                                    }
+                                                    None => view! {
+                                                        <div class="weekend-cell empty">
+                                                            <span class="weekend-na">"-"</span>
+                                                        </div>
+                                                    }.into_any(),
+                                                }
+                                            }).collect_view()}
+                                        </div>
+                                    }
+                                }).collect_view()}
+                            </div>
+                        }.into_any()
+                    }
+                }
             }}
         </div>
     }

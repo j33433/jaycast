@@ -3,7 +3,7 @@ use web_sys::window;
 
 const TRAIL_PREF_KEY: &str = "jaycast:trail";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Trail {
     CampMurphy,
     Markham,
