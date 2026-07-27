@@ -2,58 +2,81 @@
 
 # jaycast
 
-Forecast weather-informed rideability for South Florida MTB trails.
+**When should I ride?** Weather-aware trail scores for South Florida mountain bike parks.
 
 **Live:** [https://upload.bike/jaycast/](https://upload.bike/jaycast/)
 
-Browser-only (Rust → WASM via Leptos). Weather from [Open-Meteo](https://open-meteo.com/) with a **GFS seamless** / **ECMWF** model toggle. No API keys, no backend.
+Pick a park, glance at the stars, and decide. No account, no app install — just open it in your browser.
 
-## Idea
+---
 
-Choose Camp Murphy, Markham Park, or Quiet Waters Park from the location chooser. The choice persists in the browser and can be shared with `?camp-murphy`, `?markham`, or `?quiet-waters`.
+## Trails
 
-Each profile interprets weather according to its terrain:
+| Park | Vibe | After rain |
+|------|------|------------|
+| **Camp Murphy** (Jonathan Dickinson) | Sandy scrub | Firms up — often *better* once it packs |
+| **Markham Park** (Weston) | Dirt / gravel | Can stay closed or sketchy until it drains |
+| **Quiet Waters** (Deerfield Beach) | Mixed hardpack | Rarely a problem; usually rideable again soon |
 
-1. Camp Murphy: sandy, lightly shaded trails firm up after rain and dry quickly under sun.
-2. Markham: meaningful rain uses its hourly end time to estimate a drainage reopening. This is an advisory model, not an official status feed.
-3. Quiet Waters: mixed hardpack and loose-over-hard terrain never closes, is less sand-dependent, degrades more slowly after rain, and gets more generous ride-window rain thresholds and a gentler timing curve.
+Switch parks anytime. Your choice is remembered, and you can share a direct link with `?camp-murphy`, `?markham`, or `?quiet-waters`.
 
-Each day in a **30-day archive + 7-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. The default timeline shows yesterday, today, and the next 7 days. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top in three-hour periods, from midnight on the left through late evening on the right. Day-card side borders encode feels-like vs the prior week: left = morning, right = afternoon (blue cooler, red warmer). Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
+---
 
-The hero **weekend toggle** (2×2 grid icon) switches to a vertical multi-trail comparison: today plus the next five days for all three parks. Each day is a card with touch-friendly trail rows (stars, blurb, **Best** badge on the top scorer). Tap a row to open that trail’s timeline with the day expanded. The toggle choice persists in the browser.
+## What you see
+
+- **Star score** (1.0–5.0) for each day — how rideable it looks, not official park status
+- **Timeline** — yesterday through the next week, color-tinted by score
+- **Rain & clouds** on each day card (midnight → evening)
+- **Cooler / warmer** cues on the card edges vs the prior week
+- **Why** — tap a day for a simple factor breakdown (surface, rain window, temp, wind…)
+- **Weekend compare** — the grid icon stacks all three parks for the next several days and tags the **Best** pick; tap a row to jump straight to that day
+
+Units are inches and °F. Light or dark theme sticks around.
+
+Forecasts come from [Open-Meteo](https://open-meteo.com/) (GFS or ECMWF — you can flip between them). Optional nearby rain gauges improve “what already fell” when that feed is available. Still **not** official trail status — use judgment and local reports (e.g. Markham’s Facebook group when linked).
+
+---
+
+## Score model (short version)
+
+Each trail has its own personality baked in:
+
+- **Camp Murphy** cares a lot about sand pack after recent rain (and dings a wet morning ride).
+- **Markham** estimates when dirt might reopen after meaningful rain (advisory only).
+- **Quiet Waters** weights comfort weather more; surface usually stays pretty good.
+
+Details and knobs live in `src/score/` and [doc/TRAILS.md](doc/TRAILS.md). Riders who want the full map of the code can peek at [doc/CODEMAP.md](doc/CODEMAP.md).
+
+---
 
 ## Develop
 
 ```bash
 # once
 rustup target add wasm32-unknown-unknown
-cargo install trunk   # or use a trunk binary release
+cargo install trunk   # or a trunk binary release
 
 trunk serve           # http://127.0.0.1:8080
-cargo test            # heuristic unit tests
+cargo test
 trunk build --release # static site in dist/
 ```
 
-Analyze a date or inclusive range with the same scorer: `cargo run --features cli --bin jaycast -- analyze markham 2026-07-08:2026-07-11 both`. The trail slug is optional and defaults to Camp Murphy; omit the date for today.
+Native helpers (same scorer as the site):
 
-Ground-truth hourly gauge rain (Xweather, server key only): `cargo run --features cli --bin jaycast -- xweather publish --out assets/rain.json` (see `doc/XWEATHER.md`).
+```bash
+# score a day or range
+cargo run --features cli --bin jaycast -- analyze markham 2026-07-08:2026-07-11 both
 
-## Score model
+# ground-truth gauge rain feed (needs XWEATHER_API_KEY; see doc/XWEATHER.md)
+cargo run --features cli --bin jaycast -- xweather publish --out assets/rain.json
+```
 
-Heuristic weights and trail profiles live in `src/score/params.rs`, `src/score/heuristic.rs`, and `src/trails.rs`.
+More CLI detail: [doc/CLI.md](doc/CLI.md).
 
-| Factor | Role |
-|--------|------|
-| Surface/drainage | Trail-specific sand-pack, drainage-risk, or mixed-surface behavior |
-| Rain during ride | Camp Murphy and Quiet Waters penalize rain from 8 AM-noon; Markham uses hourly rain and a drainage advisory |
-| Temperature | Florida MTB comfort band, with heat-index ding |
-| Wind | Ideal light breeze ~5–12 mph; dead calm and gales both ding |
-| Forecast confidence | Tapers for farther days |
-
-Camp Murphy uses roughly **pack 55% / weather 35% / confidence 10%**. Quiet Waters weights weather more heavily and, since it never closes, uses higher ride-window rain thresholds, a more generous wet-gate floor (0.45 vs 0.25), and gentler fresh-rain timing. Markham estimates reopening from hourly rain after at least 0.10 in. Wet-day blurbs name the dominant period: **rain AM**, **rain PM**, or **rainy day**. Tune constants in `params.rs` after real rides. This is not official trail status.
+---
 
 ## License
 
-GPL-3.0-or-later (see `LICENSE`).
+GPL-3.0-or-later — see `LICENSE`.
 
-See [CODEMAP.md](doc/CODEMAP.md) for a file-level map of the project.
+Questions or trail notes: [upload.bike@gmail.com](mailto:upload.bike@gmail.com)
