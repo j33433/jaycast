@@ -533,7 +533,7 @@ fn ReadyView(
                 let today_idx = days.iter().position(|d| d.is_today).unwrap_or(0);
                 let offset = (date - days[today_idx].date).num_days();
                 let idx = (today_idx as i64 + offset).max(0) as usize;
-                view_start.set(idx.saturating_sub(1));
+                view_start.set(idx.saturating_sub(3));
             } else {
                 // Save selection for the new trail before switch_trail clears
                 // the old trail's key. load() will restore it via is_first_load.
@@ -861,6 +861,26 @@ fn Timeline(
     trail: RwSignal<Trail>,
     gauge_rain: RwSignal<GaugeRain>,
 ) -> impl IntoView {
+    Effect::new(move |_| {
+        let Some(date) = selected.get() else { return };
+        let id = format!("day-{date}");
+        spawn_local(async move {
+            gloo_timers::future::TimeoutFuture::new(66).await;
+            let Some(win) = window() else { return };
+            let Ok(viewport_h) = win.inner_height() else { return };
+            let viewport_h = viewport_h.as_f64().unwrap_or(0.0);
+            let Ok(scroll_y) = win.scroll_y() else { return };
+            let Some(doc) = win.document() else { return };
+            let Some(el) = doc.get_element_by_id(&id) else { return };
+            let rect = el.get_bounding_client_rect();
+            let el_top = rect.top() + scroll_y;
+            let el_h = rect.height();
+            let el_mid = el_top + el_h / 2.0;
+            let target = (el_mid - viewport_h / 2.0).max(0.0);
+            let _ = win.scroll_to_with_x_and_y(0.0, target);
+        });
+    });
+
     view! {
         <div class="timeline" role="list">
             {move || {
@@ -902,7 +922,7 @@ fn Timeline(
                             format_dow(date)
                         };
                         view! {
-                            <div class="day-row" role="listitem">
+                            <div class="day-row" role="listitem" id=format!("day-{date}")>
                                 <div
                                     class=move || {
                                         let mut c = String::from("day-card");
