@@ -14,6 +14,7 @@ use crate::trails::{self, Trail};
 use crate::weather::{self, WeatherModel, VIEW_DAYS};
 
 const SELECTED_KEY_PREFIX: &str = "jaycast:selected";
+const WEEKEND_PREF_KEY: &str = "jaycast:weekend-warrior";
 
 fn load_selected_pref(trail: Trail) -> Option<NaiveDate> {
     window()
@@ -41,6 +42,20 @@ fn save_selected_pref(trail: Trail, date: Option<NaiveDate>) {
     }
 }
 
+fn load_weekend_pref() -> bool {
+    window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|storage| storage.get_item(WEEKEND_PREF_KEY).ok().flatten())
+        .map(|s| s == "1")
+        .unwrap_or(false)
+}
+
+fn save_weekend_pref(active: bool) {
+    if let Some(storage) = window().and_then(|w| w.local_storage().ok().flatten()) {
+        let _ = storage.set_item(WEEKEND_PREF_KEY, if active { "1" } else { "0" });
+    }
+}
+
 #[derive(Clone)]
 enum LoadState {
     Loading,
@@ -63,7 +78,7 @@ pub fn App() -> impl IntoView {
     let gauge_rain = RwSignal::new(GaugeRain::default());
 
     let is_first_load = RwSignal::new(true);
-    let weekend_warrior = RwSignal::new(false);
+    let weekend_warrior = RwSignal::new(load_weekend_pref());
     let multi_days = RwSignal::new(Vec::<(Trail, Vec<DayForecast>)>::new());
     let multi_loading = RwSignal::new(false);
 
@@ -231,6 +246,11 @@ pub fn App() -> impl IntoView {
         load();
     });
 
+    // Kick off weekend grid fetch on cold load if the toggle was left on.
+    if load_weekend_pref() {
+        load_weekend();
+    }
+
     spawn_local(async move {
         loop {
             gloo_timers::future::TimeoutFuture::new(15 * 60 * 1000).await;
@@ -238,16 +258,25 @@ pub fn App() -> impl IntoView {
         }
     });
 
-    let switch_model = move |new_model: WeatherModel| {
-        if model.get_untracked() == new_model {
-            return;
+    let switch_model = {
+        let model = model;
+        let weekend_warrior = weekend_warrior;
+        let load_weekend = load_weekend;
+        move |new_model: WeatherModel| {
+            if model.get_untracked() == new_model {
+                return;
+            }
+            let refresh_grid = weekend_warrior.get_untracked();
+            spawn_local(async move {
+                gloo_timers::future::TimeoutFuture::new(0).await;
+                weather::save_model_pref(new_model);
+                model.set(new_model);
+                load();
+                if refresh_grid {
+                    load_weekend();
+                }
+            });
         }
-        spawn_local(async move {
-            gloo_timers::future::TimeoutFuture::new(0).await;
-            weather::save_model_pref(new_model);
-            model.set(new_model);
-            load();
-        });
     };
 
     let switch_trail = move |new_trail: Trail| {
@@ -270,6 +299,8 @@ pub fn App() -> impl IntoView {
             trail.set(new_trail);
             selected.set(None);
             view_start.set(0);
+            weekend_warrior.set(false);
+            save_weekend_pref(false);
             is_first_load.set(true);
             load();
         });
@@ -344,9 +375,13 @@ pub fn App() -> impl IntoView {
                         multi_days=multi_days
                         multi_loading=multi_loading
                         on_switch=Callback::new(switch_model)
+                        on_select_trail=Callback::new(move |t: Trail| {
+                            switch_trail(t);
+                        })
                         on_toggle_weekend=Callback::new(move |_| {
                             let was = weekend_warrior.get_untracked();
                             let next = !was;
+                            save_weekend_pref(next);
                             weekend_warrior.set(next);
                             if next {
                                 load_weekend();
@@ -470,11 +505,25 @@ fn ReadyView(
     multi_days: RwSignal<Vec<(Trail, Vec<DayForecast>)>>,
     multi_loading: RwSignal<bool>,
     on_switch: Callback<WeatherModel>,
+    on_select_trail: Callback<Trail>,
     on_toggle_weekend: Callback<()>,
 ) -> impl IntoView {
     let days_hero = days.clone();
     let days_nav = days.clone();
     let days_list = days;
+
+    let on_select_day = {
+        let weekend_warrior = weekend_warrior;
+        let on_select_trail = on_select_trail.clone();
+        Callback::new(move |(t, date): (Trail, NaiveDate)| {
+            weekend_warrior.set(false);
+            save_weekend_pref(false);
+            // Save selection for the new trail before switch_trail clears
+            // the old trail's key. load() will restore it via is_first_load.
+            save_selected_pref(t, Some(date));
+            on_select_trail.run(t);
+        })
+    };
 
     view! {
         <Hero
@@ -494,6 +543,8 @@ fn ReadyView(
                         multi_days=multi_days
                         multi_loading=multi_loading
                         trail=trail
+                        on_select_trail=on_select_trail
+                        on_select_day=on_select_day
                     />
                 }.into_any()
             } else {
@@ -1005,6 +1056,8 @@ fn WeekendWarriorView(
     multi_days: RwSignal<Vec<(Trail, Vec<DayForecast>)>>,
     multi_loading: RwSignal<bool>,
     trail: RwSignal<Trail>,
+    on_select_trail: Callback<Trail>,
+    on_select_day: Callback<(Trail, NaiveDate)>,
 ) -> impl IntoView {
     let _ = model;
 
@@ -1030,7 +1083,7 @@ fn WeekendWarriorView(
                             .and_then(|(_, days)| days.iter().find(|d| d.is_today).map(|d| d.date))
                             .unwrap_or_else(|| Local::now().date_naive());
                         let grid = WeekendGridData::build(&all, today);
-                        view! { <WeekendGrid grid=grid today=today trail=trail /> }.into_any()
+                        view! { <WeekendGrid grid=grid today=today trail=trail on_select_trail=on_select_trail on_select_day=on_select_day /> }.into_any()
                     }
                 }
             }}
@@ -1087,6 +1140,8 @@ fn WeekendGrid(
     grid: WeekendGridData,
     today: NaiveDate,
     trail: RwSignal<Trail>,
+    on_select_trail: Callback<Trail>,
+    on_select_day: Callback<(Trail, NaiveDate)>,
 ) -> impl IntoView {
     view! {
         <div class="weekend-grid">
@@ -1101,6 +1156,8 @@ fn WeekendGrid(
                         days=days
                         best_per_day=best
                         selected=move || trail.get() == *t
+                        on_select_trail=on_select_trail
+                        on_select_day=on_select_day
                     />
                 }
             }).collect_view()}
@@ -1135,17 +1192,34 @@ fn WeekendRow(
     days: HashMap<NaiveDate, DayForecast>,
     best_per_day: HashMap<NaiveDate, Trail>,
     selected: impl Fn() -> bool + Send + 'static,
+    on_select_trail: Callback<Trail>,
+    on_select_day: Callback<(Trail, NaiveDate)>,
 ) -> impl IntoView {
     view! {
         <div class=move || if selected() { "weekend-row selected" } else { "weekend-row" }>
-            <div class="weekend-trail-label">
+            <button
+                type="button"
+                class="weekend-trail-label"
+                on:click=move |_| on_select_trail.run(trail)
+            >
                 <img class="weekend-trail-icon" src=trail.icon_src() alt=""/>
                 <span>{trail.short_name()}</span>
-            </div>
+            </button>
             {dates.iter().map(|date| {
                 let cell = days.get(date);
                 let is_best = best_per_day.get(date).copied() == Some(trail);
-                render_weekend_cell(cell, is_best)
+                let on_select_day = on_select_day.clone();
+                let trail = trail;
+                let date = *date;
+                view! {
+                    <button
+                        type="button"
+                        class="weekend-cell-wrapper"
+                        on:click=move |_| on_select_day.run((trail, date))
+                    >
+                        {render_weekend_cell(cell, is_best)}
+                    </button>
+                }
             }).collect_view()}
         </div>
     }
