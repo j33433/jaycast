@@ -16,11 +16,12 @@ to speak of — this is Florida sugar sand over limestone.
 Camp Murphy rides best after meaningful rain but before the sun bakes it back to
 powder. The model scores this with **SandPack**:
 
-- More rain always improves the pack — there is no "too much" for sand.
+- More rain generally improves the pack; very heavy recent totals can still leave
+  the surface soft or puddled.
 - The timing peak is at **18 hours** after rain ends with a linear fade to soft
   over roughly 3 days. The overall pack quality multiplies rain amount by timing,
   so old rain contributes less even when totals look good.
-- Sun dries this shadeless sand aggressively, so the ET0 (sunshine) forecast
+- Sun dries this lightly canopied sand aggressively, so the ET0 (sunshine) forecast
   modulates the drying clock. Cloudy days keep the sand packed longer.
 - A long dry spell (7+ days with no significant rain) bottoms out the pack score
   regardless of other conditions. Dry sand is slow, loose, and energy-sapping.
@@ -56,11 +57,11 @@ again based on how much rain fell and when it stopped.
 
 **Closure statuses:**
 
-| Status | Meaning |
+| Status (internal) | Meaning |
 |---|---|
-| `Clear` | Likely open all day |
-| `Possible` | Unsure for at least one window (AM, PM, or both) |
-| `n/a` | No drainage constraint applies |
+| `Clear` | Likely open all day (blurb: "likely open") |
+| `Possible` | Unsure for at least one window (blurbs: "unsure", "unsure AM", "unsure PM") |
+| `NotApplicable` | No drainage constraint (non-Markham trails) |
 
 The score uses a **daylight fraction** gate instead of a wet-gate multiplier.
 If the trail is likely open for 4 of 8 morning daylight hours, the pack
@@ -91,7 +92,7 @@ conditions and more on weather.
 - Rain only **temporarily degrades** the surface. The mud penalty clears after
   14 hours.
 - The timing peak is at **30 hours** after rain — a wider, gentler window than
-  Camp Murphy's sharp 8h peak. Pack fade takes roughly 5 days.
+  Camp Murphy's 18h peak. Pack fade takes roughly 5 days.
 - Ride-window rain thresholds are **more generous** (0.12 in soft, 0.70 in hard
   vs. Camp Murphy's 0.05/0.40). A light drizzle doesn't tank the score.
 
@@ -111,8 +112,8 @@ left no mud by the following morning, confirming the 14-hour mud clear window.
 | | Camp Murphy | Markham | Quiet Waters |
 |---|---|---|---|
 | **Surface** | Sugar sand | Dirt/gravel | Mixed hardpack |
-| **Worst condition** | Long dry spell | Rain within past 18h | Heavy ride-window rain |
-| **Best condition** | Sun after rain (~8h) | 24h+ after rain | Any dry day |
+| **Worst condition** | Long dry spell | Rain within past ~18.5h | Heavy ride-window rain |
+| **Best condition** | Sun after rain (~18h) | 24h+ after rain | Any dry day |
 | **Closes?** | Never | Rain-timed advisory | Never |
 | **Pack weight** | 55% | 55% (drainage gate) | 35% |
 | **Weather weight** | 35% | 35% | 55% |

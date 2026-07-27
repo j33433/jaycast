@@ -20,6 +20,8 @@ Each profile interprets weather according to its terrain:
 
 Each day in a **30-day archive + 7-day forecast** gets a **1.0–5.0 star** score (one decimal) plus a factor breakdown. The default timeline shows yesterday, today, and the next 7 days. Day cards are tinted by score. Their subtle background curves show rain rising from the bottom and gray cloud cover descending from the top in three-hour periods, from midnight on the left through late evening on the right. Day-card side borders encode feels-like vs the prior week: left = morning, right = afternoon (blue cooler, red warmer). Use **Older / Today / Newer** to scroll the timeline and check scores against days you rode. Units are **inches** and °F. Light/dark theme persists in the browser.
 
+The hero **weekend toggle** (2×2 grid icon) switches to a vertical multi-trail comparison: today plus the next five days for all three parks. Each day is a card with touch-friendly trail rows (stars, blurb, **Best** badge on the top scorer). Tap a row to open that trail’s timeline with the day expanded. The toggle choice persists in the browser.
+
 ## Develop
 
 ```bash
@@ -34,7 +36,7 @@ trunk build --release # static site in dist/
 
 Analyze a date or inclusive range with the same scorer: `cargo run --features cli --bin jaycast -- analyze markham 2026-07-08:2026-07-11 both`. The trail slug is optional and defaults to Camp Murphy; omit the date for today.
 
-Ground-truth hourly gauge rain (Xweather, server key only): `cargo run --features cli --bin jaycast -- xweather publish --out xweather.json` (see `doc/XWEATHER.md`).
+Ground-truth hourly gauge rain (Xweather, server key only): `cargo run --features cli --bin jaycast -- xweather publish --out assets/rain.json` (see `doc/XWEATHER.md`).
 
 ## Score model
 
@@ -43,7 +45,7 @@ Heuristic weights and trail profiles live in `src/score/params.rs`, `src/score/h
 | Factor | Role |
 |--------|------|
 | Surface/drainage | Trail-specific sand-pack, drainage-risk, or mixed-surface behavior |
-| Rain during ride | Camp Murphy and Quiet Waters penalize rain from 8 AM-noon; Markham uses daily rain and a drainage advisory |
+| Rain during ride | Camp Murphy and Quiet Waters penalize rain from 8 AM-noon; Markham uses hourly rain and a drainage advisory |
 | Temperature | Florida MTB comfort band, with heat-index ding |
 | Wind | Ideal light breeze ~5–12 mph; dead calm and gales both ding |
 | Forecast confidence | Tapers for farther days |

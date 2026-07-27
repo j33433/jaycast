@@ -13,9 +13,11 @@ jaycast/
   robots.txt
   sitemap.xml
   README.md
-  CLI.md
-  CODEMAP.md
-  XWEATHER.md
+  doc/
+    CLI.md
+    CODEMAP.md
+    TRAILS.md
+    XWEATHER.md
   assets/
     style.css
     jaycast-icon.png
@@ -29,6 +31,7 @@ jaycast/
     app.rs
     theme.rs
     trails.rs
+    rain_feed.rs
     score/
       mod.rs
       params.rs
@@ -36,12 +39,11 @@ jaycast/
     weather/
       mod.rs
       types.rs
-    bin/
-      jaycast.rs
-    rain_feed.rs
     xweather/
       mod.rs
       rescan.rs
+    bin/
+      jaycast.rs
   tests/
     fixtures/
       markham-2mo.json
@@ -60,15 +62,17 @@ jaycast/
 | `index.html` | App entry HTML. Inline JS applies saved theme before render. OpenGraph/Twitter meta, JSON-LD structured data. Trunk asset links for icon, CSS, WASM, and copy-file directives for SVGs, LICENSE, robots.txt, sitemap.xml. |
 | `robots.txt` | Allows `/jaycast/`, declares sitemap URL. |
 | `sitemap.xml` | Single URL entry for the deployed site. |
-| `README.md` | Project description, trail profiles, develop/test/build instructions, CLI usage, score model summary. |
-| `CLI.md` | CLI reference with examples for `analyze`, `backtest`, `xweather publish/dump/rescan`. |
-| `XWEATHER.md` | Xweather auth, station map, QC rules, feed CLI reference. |
+| `README.md` | Project description, trail profiles, weekend comparison grid, develop/test/build instructions, CLI usage, score model summary. |
+| `doc/CLI.md` | CLI reference with examples for `analyze`, `backtest`, `xweather publish/dump/rescan`. |
+| `doc/CODEMAP.md` | This file — file-level map of the project. |
+| `doc/TRAILS.md` | Per-trail surface character, rain response, score weights, gauge stations. |
+| `doc/XWEATHER.md` | Xweather auth, station map, QC rules, feed CLI reference. |
 
 ## assets/
 
 | File | Description |
 |------|-------------|
-| `style.css` | Application stylesheet. Florida scrub palette with dark (default) and light themes. CSS custom properties for jay blue, scrub green, sand, accent, warn, bad, star, rain. Styles for header, trail logo, location chooser dialog, hero, model toggle, theme toggle, timeline nav, day cards (score-tinted gradients, AM/PM temp side borders, weekend/best/selected/past/today states), rain-wave and cloud-wave SVG backgrounds, detail panel with factor bars, footer, skeleton shimmer loader. Responsive breakpoint at 30rem. |
+| `style.css` | Application stylesheet. Florida scrub palette with dark (default) and light themes. CSS custom properties for jay blue, scrub green, sand, accent, warn, bad, star, rain. Styles for header, trail logo, location chooser dialog, hero, model toggle, theme toggle, weekend-warrior toggle, timeline nav, day cards (score-tinted gradients, AM/PM temp side borders, weekend/best/selected/past/today states), rain-wave and cloud-wave SVG backgrounds, detail panel with factor bars, vertical weekend comparison grid (day cards with trail rows, Best badge), footer, skeleton shimmer loader. Responsive breakpoint at 30rem. |
 | `jaycast-icon.png` | App icon / favicon / OG image. Referenced by `index.html` and `README.md`. |
 
 ## art/
@@ -86,8 +90,10 @@ jaycast/
 
 Crate root. Module doc: "weather-informed MTB trail rideability forecasts."
 
-- Private modules: `app`, `theme`
+- Private modules: `app`, `theme`, `rain_feed`
 - Public modules: `score`, `trails`, `weather`
+- Native-only (`#[cfg(not(target_arch = "wasm32"))]`): `xweather`
+- Re-exports: `apply_gauge_to_days`, `GaugeRain`; native also `load_gauge_from_file`
 - `#[wasm_bindgen(start)] pub fn main()` - entry point; sets panic hook, mounts `App` to body
 
 ### `src/app.rs`
@@ -96,19 +102,24 @@ Leptos UI component tree. All components and helpers are private.
 
 **Types:**
 - `enum LoadState { Loading, Ready(Vec<DayForecast>), Error(String) }`
+- `struct WeekendGridData { dates, map, best_per_day }` - pure data prep for the multi-trail comparison grid; `build(all, today)` indexes scored days by trail/date and picks Best per day
 
 **Components:**
-- `App()` - root; manages state signals (load state, selected day, view start, refreshed_at, model, trail, dialog, grid coords, theme, gauge_rain, first load), runs fetch+score effect + 15-min auto-refresh loop, handles model/trail switching
+- `App()` - root; manages state signals (load state, selected day, view start, refreshed_at, model, trail, dialog, grid coords, theme, gauge_rain, first load, weekend_warrior, multi_days, multi_loading), runs single-trail fetch+score effect + 15-min auto-refresh loop (timeline only; grid is refreshed on toggle/model switch), `load_weekend` fetches history+forecast+gauge for all three trails; trail switch exits weekend view; model switch refreshes grid when open
 - `LocationDialog(open, selected, on_change)` - modal trail chooser
 - `LoadingView()` - skeleton loading state
 - `ErrorView(message, on_retry)` - error display with retry
-- `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, gauge_rain, on_switch)` - composes Hero, TimelineNav, Timeline, footer
-- `Hero(days, refreshed_at, model, trail, grid_lat, grid_lon, theme, on_switch)` - best ride window, GFS/ECMWF toggle, theme toggle (inline sun/moon SVG), distance display
+- `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, gauge_rain, weekend_warrior, multi_days, multi_loading, on_switch, on_select_trail, on_toggle_weekend)` - composes Hero + either Timeline or WeekendWarriorView + footer; `on_select_day` jumps from grid cell to trail timeline with that day selected
+- `Hero(days, refreshed_at, model, theme, weekend_warrior, on_switch, on_toggle_weekend)` - best ride window, GFS/ECMWF toggle, theme toggle (inline sun/moon SVG), weekend-warrior toggle (2×2 grid icon)
 - `TimelineNav(days, view_start, selected)` - Older/Today/Newer scroll nav
 - `Timeline(days, view_start, selected, trail, gauge_rain)` - day cards with rain/cloud wave SVG backgrounds, AM/PM temp border colors, blue gauge curve overlay, Markham Facebook status link
+- `WeekendWarriorView(multi_days, multi_loading, trail, on_select_day)` - loading/empty/ready dispatch for multi-trail comparison
+- `WeekendGrid(grid, today, trail, on_select_day)` - vertical day cards (today + next 5); each card lists all three trails as touch-friendly rows with stars, blurb, and Best badge
 
 **Helper functions:**
-- `day_detail_view(d, trail)` - detail panel with factor breakdown bars
+- `load_selected_pref(trail) / save_selected_pref(trail, date)` - per-trail expanded day card in localStorage
+- `load_weekend_pref() / save_weekend_pref(active)` - weekend grid toggle in localStorage (`jaycast:weekend-warrior`)
+- `day_detail_view(d)` - detail panel with factor breakdown bars
 - `stars_str(n) -> String`
 - `score_style(score) -> String`
 - `day_card_style(score, am_vs_avg_f, pm_vs_avg_f) -> String` - score tint + AM/PM border colors
@@ -121,7 +132,7 @@ Leptos UI component tree. All components and helpers are private.
 - `is_weekend(d) -> bool`
 - `haversine_km(lat1, lon1, lat2, lon2) -> f64`
 - `source_distance_line(trail, grid_lat, grid_lon, gauge)` - footer: forecast distance + gauge distances + observation timestamps
-- `format_weather_as_of(fetched_at, model, init_time) -> String` - shows model init time in local time (e.g. "forecast as of 6:00 AM") with fallback to fetch time
+- `format_weather_as_of(init_time, fallback_fetched_at) -> String` - shows model init time in local time (e.g. "forecast as of 6:00 AM") with fallback to fetch time
 
 ### `src/theme.rs`
 
@@ -148,7 +159,7 @@ Light/dark theme preference with localStorage persistence.
 Trail definitions and localStorage/URL persistence.
 
 **Types:**
-- `enum Trail { CampMurphy, Markham, QuietWaters }`
+- `enum Trail { CampMurphy, Markham, QuietWaters }` - derives `Clone, Copy, Debug, PartialEq, Eq, Hash`
 
 **`impl Trail`:**
 - `pub const ALL: [Self; 3]`
@@ -262,7 +273,7 @@ Open-Meteo weather client. Private module `types` re-exported.
 - `type WeatherFetch = (ForecastResponse, i64)`
 
 **Functions (public):**
-- `pub fn load_model_pref() -> WeatherModel` - localStorage, defaults to GFS
+- `pub fn load_model_pref() -> WeatherModel` - localStorage, defaults to ECMWF
 - `pub fn save_model_pref(model: WeatherModel)`
 - `pub async fn fetch_model_init_time(model) -> Option<i64>` - fetches `last_run_initialisation_time` from Open-Meteo metadata API (`/data/{domain}/static/meta.json`), 30-min localStorage cache
 - `pub async fn fetch_forecast(model, trail) -> Result<WeatherFetch, String>` - checks cache, fetches via gloo-net, saves cache
@@ -304,8 +315,6 @@ Open-Meteo API response types and day-window extraction.
 
 **Tests (2):** `rain_windows_start_when_the_park_opens`, `apparent_windows_averaged_correctly`
 
-## src/bin/
-
 ### `src/rain_feed.rs`
 
 Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max tip per hour across stations per trail/day. Unusable when every station's today day is `stale` (footer warning; no overlay or scoring blend). When usable, past completed hours replace model precip before scoring; today uses only non-stale stations. Day cards draw blue gauge curve over the model rain wave when usable.
@@ -329,6 +338,8 @@ Native-only Xweather hourly rain feed builder. Auth via `XWEATHER_API_KEY`. Fetc
 Discovers nearby PWS and mesonet stations via Xweather `/observations/closest`, rejects blocklisted / no-precip / stuck-zero gauges, ranks by distance tier (primary ≤5 mi, backup 5–10 mi). Print-only audit. Does not modify the feed station table.
 
 **Tests:** distance tiers, network kind parsing, stuck-zero detection, evaluation shape, haversine.
+
+## src/bin/
 
 ### `src/bin/jaycast.rs`
 

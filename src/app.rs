@@ -553,7 +553,6 @@ fn ReadyView(
             if weekend_warrior.get() {
                 view! {
                     <WeekendWarriorView
-                        model=model
                         multi_days=multi_days
                         multi_loading=multi_loading
                         trail=trail
@@ -1062,17 +1061,14 @@ fn Timeline(
     }
 }
 
-/// Compact multi-trail comparison grid: today + next 3 days × all 3 trails.
+/// Compact multi-trail comparison grid: today + next 5 days × all 3 trails.
 #[component]
 fn WeekendWarriorView(
-    model: RwSignal<WeatherModel>,
     multi_days: RwSignal<Vec<(Trail, Vec<DayForecast>)>>,
     multi_loading: RwSignal<bool>,
     trail: RwSignal<Trail>,
     on_select_day: Callback<(Trail, NaiveDate)>,
 ) -> impl IntoView {
-    let _ = model;
-
     view! {
         <div class="weekend-warrior">
             {move || {

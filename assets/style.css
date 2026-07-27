@@ -1262,15 +1262,6 @@ body {
   outline-offset: -2px;
 }
 
-.weekend-trail-row.selected {
-}
-
-.weekend-trail-row.best-bet {
-}
-
-.weekend-trail-row.selected.best-bet {
-}
-
 .weekend-trail-row-main {
   display: flex;
   align-items: center;
@@ -1321,16 +1312,6 @@ body {
   color: var(--text-muted);
 }
 
-/* Right chevron to jump to that trail */
-.weekend-trail-goto {
-  display: none;
-}
-
-.weekend-goto-icon {
-  width: 0.85rem;
-  height: 0.85rem;
-}
-
 /* Best Bet badge (inline) */
 .best-bet-badge {
   display: inline-block;
@@ -1345,4 +1326,34 @@ body {
   white-space: nowrap;
   line-height: 1.3;
   margin-left: 0.3rem;
+}
+
+@media (max-width: 30rem) {
+  .header {
+    gap: 0.75rem;
+  }
+
+  .trail-logo {
+    width: 6.9rem;
+    height: 6.9rem;
+  }
+
+  .header h1 {
+    font-size: 1.8rem;
+  }
+
+  .header .location {
+    margin-top: 0.45rem;
+    font-size: 0.78rem;
+  }
+
+  .day-card {
+    grid-template-columns: 3.75rem 1fr auto;
+    column-gap: 0.3rem;
+    padding: 0.7rem 0.65rem;
+  }
+
+  .day-card .precip {
+    min-width: 2.4rem;
+  }
 }
