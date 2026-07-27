@@ -295,7 +295,11 @@ pub fn App() -> impl IntoView {
 
             trails::save_trail_pref(new_trail);
             trails::update_trail_url(new_trail);
+            let keep_date = selected.get_untracked();
             save_selected_pref(trail.get_untracked(), None);
+            if let Some(date) = keep_date {
+                save_selected_pref(new_trail, Some(date));
+            }
             trail.set(new_trail);
             selected.set(None);
             view_start.set(0);
