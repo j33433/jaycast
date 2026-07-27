@@ -379,8 +379,27 @@ pub fn App() -> impl IntoView {
                         multi_days=multi_days
                         multi_loading=multi_loading
                         on_switch=Callback::new(switch_model)
-                        on_select_trail=Callback::new(move |t: Trail| {
-                            switch_trail(t);
+                        on_select_trail_with_date=Callback::new(move |(t, d): (Trail, NaiveDate)| {
+                            spawn_local(async move {
+                                gloo_timers::future::TimeoutFuture::new(0).await;
+                                if trail.get_untracked() == t {
+                                    location_dialog_open.set(false);
+                                    return;
+                                }
+                                location_dialog_open.set(false);
+                                gloo_timers::future::TimeoutFuture::new(0).await;
+                                trails::save_trail_pref(t);
+                                trails::update_trail_url(t);
+                                save_selected_pref(trail.get_untracked(), None);
+                                save_selected_pref(t, Some(d));
+                                trail.set(t);
+                                selected.set(None);
+                                view_start.set(0);
+                                weekend_warrior.set(false);
+                                save_weekend_pref(false);
+                                is_first_load.set(true);
+                                load();
+                            });
                         })
                         on_toggle_weekend=Callback::new(move |_| {
                             let was = weekend_warrior.get_untracked();
@@ -509,7 +528,7 @@ fn ReadyView(
     multi_days: RwSignal<Vec<(Trail, Vec<DayForecast>)>>,
     multi_loading: RwSignal<bool>,
     on_switch: Callback<WeatherModel>,
-    on_select_trail: Callback<Trail>,
+    on_select_trail_with_date: Callback<(Trail, NaiveDate)>,
     on_toggle_weekend: Callback<()>,
 ) -> impl IntoView {
     let days_hero = days.clone();
@@ -518,7 +537,7 @@ fn ReadyView(
 
     let on_select_day = {
         let weekend_warrior = weekend_warrior;
-        let on_select_trail = on_select_trail.clone();
+        let on_select_trail_with_date = on_select_trail_with_date.clone();
         let trail = trail;
         let selected = selected;
         let view_start = view_start;
@@ -527,7 +546,6 @@ fn ReadyView(
             weekend_warrior.set(false);
             save_weekend_pref(false);
             if trail.get_untracked() == t {
-                // Same trail — no switch_trail needed. Just select the day.
                 selected.set(Some(date));
                 save_selected_pref(t, Some(date));
                 let today_idx = days.iter().position(|d| d.is_today).unwrap_or(0);
@@ -535,10 +553,8 @@ fn ReadyView(
                 let idx = (today_idx as i64 + offset).max(0) as usize;
                 view_start.set(idx.saturating_sub(3));
             } else {
-                // Save selection for the new trail before switch_trail clears
-                // the old trail's key. load() will restore it via is_first_load.
                 save_selected_pref(t, Some(date));
-                on_select_trail.run(t);
+                on_select_trail_with_date.run((t, date));
             }
         })
     };
