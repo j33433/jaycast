@@ -56,6 +56,13 @@ fn save_weekend_pref(active: bool) {
     }
 }
 
+fn url_has_screenshot_flag() -> bool {
+    window()
+        .and_then(|w| w.location().search().ok())
+        .map(|s| s.contains("screenshot"))
+        .unwrap_or(false)
+}
+
 #[derive(Clone)]
 enum LoadState {
     Loading,
@@ -154,6 +161,12 @@ pub fn App() -> impl IntoView {
                                 if let Some(date) = saved {
                                     if scored.iter().any(|d| d.date == date) {
                                         selected.set(Some(date));
+                                    }
+                                }
+                                if url_has_screenshot_flag() {
+                                    if let Some(today_day) = scored.iter().find(|d| d.is_today) {
+                                        selected.set(Some(today_day.date));
+                                        view_start.set(today_idx);
                                     }
                                 }
                             } else if prev_sel.is_some()

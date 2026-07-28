@@ -21,6 +21,16 @@
         } catch (e) {}
       })();
     </script>
+    <script>
+      (function () {
+        if (window.location.search.includes('screenshot')) {
+          var s = document.createElement('style');
+          s.id = 'jaycast-screenshot';
+          s.textContent = 'html,body{background:transparent!important}body{background-image:none!important}';
+          document.head.appendChild(s);
+        }
+      })();
+    </script>
     <link rel="canonical" href="https://upload.bike/jaycast/" />
 
     <meta property="og:type" content="website" />
