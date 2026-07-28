@@ -4,8 +4,8 @@
 
 Weather-aware trail scores for South Florida mountain bike parks.
 
-**Live:** [https://upload.bike/jaycast/](https://upload.bike/jaycast/)  
-[Screenshot](doc/jaycast.png) (alpha PNG, via `?screenshot`)
+- **Live:** [https://upload.bike/jaycast/](https://upload.bike/jaycast/)
+- **Screenshot**: [doc/jaycast.png](doc/jaycast.png)
 
 Pick a park, check the stars, decide. No account or app install; open it in the browser.
 
