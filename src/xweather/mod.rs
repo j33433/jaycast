@@ -27,53 +27,12 @@ const CACHE_SCHEMA: u32 = 1;
 const CACHE_RETENTION_DAYS: i64 = 60;
 const DEFAULT_CACHE_NAME: &str = ".jaycast-xweather-cache.json";
 
-#[derive(Clone, Copy, Debug)]
-struct StationSpec {
-    id: &'static str,
-    role: &'static str,
-}
+use crate::gauges::{self, GaugeSpec};
+use crate::trails::Trail;
 
-#[derive(Clone, Copy, Debug)]
-struct TrailSpec {
-    slug: &'static str,
-    stations: &'static [StationSpec],
+fn trail_stations() -> impl Iterator<Item = (Trail, &'static [GaugeSpec])> {
+    Trail::ALL.iter().map(|&t| (t, gauges::stations_for_trail(t)))
 }
-
-const TRAILS: &[TrailSpec] = &[
-    TrailSpec {
-        slug: "markham",
-        stations: &[
-            StationSpec {
-                id: "MID_E8181",
-                role: "primary",
-            },
-            StationSpec {
-                id: "PWS_W4RCT",
-                role: "secondary",
-            },
-        ],
-    },
-    TrailSpec {
-        slug: "camp-murphy",
-        stations: &[
-            StationSpec {
-                id: "MID_C8019",
-                role: "primary",
-            },
-            StationSpec {
-                id: "PWS_JOE4SPEED",
-                role: "primary",
-            },
-        ],
-    },
-    TrailSpec {
-        slug: "quiet-waters",
-        stations: &[StationSpec {
-            id: "PWS_363636363",
-            role: "primary",
-        }],
-    },
-];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Feed {
@@ -313,9 +272,9 @@ fn build_feed(days: u32, cache_path: &Path) -> Result<Feed, String> {
     );
 
     let mut trails = BTreeMap::new();
-    for trail in TRAILS {
-        let mut stations = Vec::with_capacity(trail.stations.len());
-        for station in trail.stations {
+    for (trail, stations_spec) in trail_stations() {
+        let mut stations = Vec::with_capacity(stations_spec.len());
+        for station in stations_spec {
             let mut day_feeds = Vec::with_capacity(days as usize);
             let mut date = day_start;
             loop {
@@ -374,7 +333,7 @@ fn build_feed(days: u32, cache_path: &Path) -> Result<Feed, String> {
                 days: day_feeds,
             });
         }
-        trails.insert(trail.slug.to_string(), TrailFeed { stations });
+        trails.insert(trail.slug().to_string(), TrailFeed { stations });
     }
 
     if cache_dirty {

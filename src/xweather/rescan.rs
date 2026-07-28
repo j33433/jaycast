@@ -6,7 +6,8 @@ use serde::Deserialize;
 
 use crate::trails::Trail;
 
-use super::{http_get_json, Auth, BASE_URL, TRAILS};
+use crate::gauges;
+use super::{http_get_json, Auth, BASE_URL};
 
 const DEFAULT_CLOSEST_LIMIT: u32 = 15;
 const DEFAULT_QC_DAYS: u32 = 7;
@@ -133,6 +134,8 @@ struct ConditionsSummaryResponse {
 struct Candidate {
     id: String,
     distance_mi: f64,
+    lat: f64,
+    lon: f64,
     place: String,
     trust: Option<f64>,
     last_ob: Option<String>,
@@ -170,6 +173,8 @@ impl RejectReason {
 struct RankedStation {
     id: String,
     distance_mi: f64,
+    lat: f64,
+    lon: f64,
     place: String,
     trust: Option<f64>,
     last_ob: Option<String>,
@@ -269,11 +274,10 @@ fn rescan_trail(
         lon
     );
 
-    let current: Vec<(&str, &str)> = TRAILS
+    let current: Vec<(&str, &str)> = gauges::stations_for_trail(trail)
         .iter()
-        .find(|t| t.slug == trail.slug())
-        .map(|t| t.stations.iter().map(|s| (s.id, s.role)).collect())
-        .unwrap_or_default();
+        .map(|s| (s.id, s.role))
+        .collect();
     if !current.is_empty() {
         print!("feed now: ");
         for (i, (id, role)) in current.iter().enumerate() {
@@ -333,6 +337,8 @@ fn rescan_trail(
                     Candidate {
                         id: id.clone(),
                         distance_mi: f64::NAN, // filled after summary if needed
+                        lat: f64::NAN,
+                        lon: f64::NAN,
                         place: String::from("(feed)"),
                         trust: None,
                         last_ob: None,
@@ -654,7 +660,7 @@ fn print_recommendation(
         .collect();
     if feed_ids != rec_ids {
         println!(
-            "note: differs from current feed — update TRAILS in src/xweather/mod.rs only after multi-event review."
+            "note: differs from current feed — update stations in src/gauges.rs only after multi-event review."
         );
     } else {
         println!("note: matches current feed set (order may differ).");
@@ -665,6 +671,34 @@ fn print_recommendation(
             backup_ok.len()
         );
     }
+
+    // Print copy-pasteable StationSpec entries.
+    println!();
+    println!("code (replace stations array):");
+    print_station_spec(primary, "primary");
+    if let Some(s) = secondary {
+        print_station_spec(s, "secondary");
+    }
+}
+
+fn print_station_spec(s: &RankedStation, role: &str) {
+    let (lat, lon) = if s.lat.is_finite() && s.lon.is_finite() {
+        (s.lat, s.lon)
+    } else {
+        // No coordinates available — print placeholder with a comment.
+        println!(
+            "            // FIXME: coordinates unknown for {}",
+            s.id
+        );
+        (0.0_f64, 0.0_f64)
+    };
+    println!(
+        "            StationSpec {{\n                id: \"{}\",\n                role: \"{}\",\n                lat: {:.6},\n                lon: {:.6},\n            }},",
+        s.id,
+        role,
+        lat,
+        lon,
+    );
 }
 
 fn fmt_mi(distance_mi: f64) -> String {
@@ -754,6 +788,8 @@ fn evaluate_station(
     Ok(Ok(RankedStation {
         id: c.id.clone(),
         distance_mi: c.distance_mi,
+        lat: c.lat,
+        lon: c.lon,
         place: c.place.clone(),
         trust: c.trust,
         last_ob: c.last_ob.clone(),
@@ -816,9 +852,15 @@ fn fetch_closest(
                     || o.precip_since_last_ob_in.is_some()
             })
             .unwrap_or(false);
+        let (cand_lat, cand_lon) = match (lat_s, lon_s) {
+            (Some(a), Some(b)) => (a, b),
+            _ => (f64::NAN, f64::NAN),
+        };
         out.push(Candidate {
             id,
             distance_mi,
+            lat: cand_lat,
+            lon: cand_lon,
             place,
             trust: ob.and_then(|o| o.trust_factor),
             last_ob: ob.and_then(|o| o.date_time_iso.clone()),
@@ -926,6 +968,8 @@ fn fetch_one_meta_from_summary(
     Ok(Some(Candidate {
         id: id.to_string(),
         distance_mi: haversine_mi(trail_lat, trail_lon, lat_s, lon_s),
+        lat: lat_s,
+        lon: lon_s,
         place,
         trust: None,
         last_ob: None,
@@ -945,6 +989,8 @@ fn candidate_from_closest(
     Candidate {
         id: s.id.unwrap_or_else(|| fallback_id.to_string()),
         distance_mi: haversine_mi(trail_lat, trail_lon, lat_s, lon_s),
+        lat: lat_s,
+        lon: lon_s,
         place: s
             .place
             .as_ref()
@@ -1188,6 +1234,8 @@ mod tests {
         let near = RankedStation {
             id: "NEAR".into(),
             distance_mi: 1.7,
+            lat: 0.0,
+            lon: 0.0,
             place: String::new(),
             trust: Some(100.0),
             last_ob: None,
@@ -1200,6 +1248,8 @@ mod tests {
         let far = RankedStation {
             id: "FAR".into(),
             distance_mi: 3.7,
+            lat: 0.0,
+            lon: 0.0,
             place: String::new(),
             trust: Some(100.0),
             last_ob: None,

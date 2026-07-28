@@ -1,3 +1,4 @@
+use crate::gauges;
 use wasm_bindgen::JsValue;
 use web_sys::window;
 
@@ -54,15 +55,11 @@ impl Trail {
     }
 
     /// Lat/lon of rain gauges used for this trail (display distances only; no IDs).
-    pub fn rain_gauge_coords(self) -> &'static [(f64, f64)] {
-        match self {
-            Self::CampMurphy => &[
-                (26.967_510_223_389, -80.097_351_074_219),
-                (26.967_62, -80.097_37),
-            ],
-            Self::Markham => &[(26.121_17, -80.409_33), (26.106_63, -80.361_71)],
-            Self::QuietWaters => &[(26.344_482, -80.163_688)],
-        }
+    pub fn rain_gauge_coords(self) -> Vec<(f64, f64)> {
+        gauges::stations_for_trail(self)
+            .iter()
+            .map(|s| (s.lat, s.lon))
+            .collect()
     }
 
     pub fn icon_src(self) -> &'static str {
