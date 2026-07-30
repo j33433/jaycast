@@ -520,7 +520,7 @@ fn LocationDialog(
 
 #[component]
 fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
-    // Static demo paths: clouds morning-left, forecast rain peaks ~4am, gauge PM.
+    // Static demo paths: clouds morning-left, forecast rain peaks ~4:30am, gauge PM.
     // 8×3h cloud %; pin callout at ~9am on the curve (same mapping as cloud_wave_path).
     let cloud_3h = [85.0, 92.0, 78.0, 55.0, 28.0, 12.0, 8.0, 6.0];
     let cloud_path = cloud_wave_path(&cloud_3h);
@@ -539,15 +539,21 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
     let cloud_edge_y = (cloud_pct.clamp(0.0, 100.0) / 100.0) * 52.0;
     let cloud_pin_y = cloud_edge_y * 0.45;
     let cloud_pin_style = format!("--pin-x:{cloud_pin_x:.2}%; --pin-y:{cloud_pin_y:.2}%");
-    // 8×3h buckets; peak at index 1 (≈4am). Same mapping as rain_wave_path.
-    let rain_3h = [0.06, 0.2, 0.1, 0.02, 0.0, 0.0, 0.0, 0.0];
-    let rain_peak_i = 1usize;
-    let rain_peak_in = rain_3h[rain_peak_i];
+    // 8×3h buckets; crest near 4:30am. Same mapping as rain_wave_path.
+    // Pin x is layout-driven in CSS (midway date→stars); y tracks the curve.
+    let rain_3h = [0.05, 0.2, 0.12, 0.02, 0.0, 0.0, 0.0, 0.0];
     let rain_path = rain_wave_path(&rain_3h);
-    // viewBox % of the day-card (SVG is inset:0). Peak of the filled rain curve.
-    let rain_pin_x = rain_peak_i as f64 * 100.0 / (rain_3h.len() - 1) as f64;
-    let rain_pin_y = 100.0 - (rain_peak_in.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0;
-    let rain_pin_style = format!("--pin-x:{rain_pin_x:.2}%; --pin-y:{rain_pin_y:.2}%");
+    let rain_pin_hour = 4.5_f64;
+    let rain_t = (rain_pin_hour / 24.0) * (rain_3h.len() - 1) as f64;
+    let rain_i = rain_t.floor() as usize;
+    let rain_f = rain_t - rain_i as f64;
+    let rain_in = if rain_i + 1 < rain_3h.len() {
+        rain_3h[rain_i] * (1.0 - rain_f) + rain_3h[rain_i + 1] * rain_f
+    } else {
+        rain_3h[rain_3h.len() - 1]
+    };
+    let rain_pin_y = 100.0 - (rain_in.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0;
+    let rain_pin_style = format!("--pin-y:{rain_pin_y:.2}%");
     // Hourly tips; peak at hour 15 (3pm). Same mapping as rain_gauge_wave_path.
     let gauge_hourly = [
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.03, 0.07, 0.12, 0.18, 0.15,
@@ -609,13 +615,13 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                             </p>
                             <p class="help-edge-note">
                                 "Card edges show feels-like vs the prior week: "
-                                <span class="help-edge-cool">"blue = cooler"</span>
+                                <span class="help-edge-cool">"blue"</span>" is cooler"
                                 ", "
-                                <span class="help-edge-warm">"red = warmer"</span>
+                                <span class="help-edge-warm">"red"</span>" is warmer"
                                 ". Left is morning, right is afternoon. "
                                 "This example shows an unusually cool morning."
                             </p>
-                            <p>"Tap a day for the factor breakdown."</p>
+                            <p>"Tap a day to open the details panel."</p>
                         </div>
                         <div class="help-card-stage">
                             <div class="help-demo">
@@ -678,7 +684,7 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                         </div>
                                         <div class="mid">
                                             <div class="stars-sm">"4.2 ★"</div>
-                                            <div class="blurb">"packed sand, light PM rain"</div>
+                                            <div class="blurb">"sandy, light PM rain"</div>
                                         </div>
                                         <div class="precip">
                                             "0.41\""

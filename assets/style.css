@@ -543,6 +543,15 @@ body {
   bottom: 0.35rem;
 }
 
+/*
+ * Midway between the date *text* and the stars (not the full 4.5rem date
+ * column — the label is shorter, so column-edge math lands on the stars).
+ * content-start + avg(date text ~2.6rem, stars at 4.5rem+gap).
+ */
+.help-anno-rain-pin {
+  left: calc(4px + 1rem + 3.7rem);
+}
+
 .help-demo-card .hourly-ticks {
   opacity: 1;
 }
@@ -1622,6 +1631,10 @@ body {
 
   .help-demo {
     padding: 2.4rem 0.35rem 0.4rem;
+  }
+
+  .help-anno-rain-pin {
+    left: calc(4px + 0.65rem + 3.15rem);
   }
 
   .help-bubble {
