@@ -441,15 +441,6 @@ body {
   border-radius: calc(var(--radius) - 2px);
 }
 
-.help-top {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.35rem 0.45rem;
-  align-items: end;
-  /* Side padding matches the card gutters so bubbles map onto the card zones. */
-  padding: 0.55rem 7.5rem 0.15rem;
-}
-
 .help-mid {
   display: grid;
   grid-template-columns: 7.1rem minmax(0, 1fr) 7.1rem;
@@ -459,37 +450,14 @@ body {
   flex: 1 1 auto;
 }
 
-/* Bottom callouts are positioned to the card's own horizontal extent so the
-   "Current time" note lines up with the now-marker at its exact hour. */
-.help-bot {
-  position: relative;
-  height: 3rem;
-  margin: 0.1rem 7.5rem 0.55rem;
-}
-
-.help-anno-now {
-  position: absolute;
-  top: 0;
-  /* now-marker sits at 45.83% (11:00) of the card width. */
-  left: 45.83%;
-  transform: translateX(-50%);
-}
-
-/* Long stem so it visually connects up past the detail panel to the marker. */
-.help-anno-now .help-stem {
-  height: 2.5rem;
-}
-
-.help-anno-detail {
-  position: absolute;
-  top: 0;
-  /* Points at the factor bar on the right side of the detail panel. */
-  right: 0;
-}
-
 .help-demo {
   min-width: 0;
   pointer-events: none;
+}
+
+/* Card + pin-callouts share one box so --pin-x/--pin-y match the SVG viewBox. */
+.help-demo-card-wrap {
+  position: relative;
 }
 
 /* Taller demo card gives the cloud (top) and rain (bottom) curves room to read. */
@@ -497,6 +465,66 @@ body {
   cursor: default;
   min-height: 6.5rem;
   align-content: center;
+}
+
+/* Pin tip sits at (--pin-x, --pin-y) on the card; bubble + stem sit above it. */
+.help-anno-pin {
+  position: absolute;
+  left: var(--pin-x, 50%);
+  top: var(--pin-y, 50%);
+  z-index: 5;
+  width: 0;
+  height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.help-anno-pin .help-bubble {
+  position: absolute;
+  bottom: 2.55rem;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  max-width: none;
+}
+
+.help-anno-pin .help-stem {
+  position: absolute;
+  left: 0;
+  bottom: 0.35rem;
+  width: 1px;
+  height: 2.1rem;
+  margin: 0;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+/* Hide the default down-stem arrowhead; pin is the tip. */
+.help-anno-pin .help-stem::after {
+  display: none;
+}
+
+.help-anno-pin .help-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -1px);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid color-mix(in srgb, var(--text-muted) 70%, transparent);
+}
+
+/* Clouds: tip stays put; short stem so the bubble sits closer to the pin. */
+.help-anno-cloud-pin .help-bubble {
+  bottom: 1.85rem;
+}
+
+.help-anno-cloud-pin .help-stem {
+  height: 1.4rem;
+  bottom: 0.35rem;
 }
 
 .help-demo-card .hourly-ticks {
@@ -524,12 +552,7 @@ body {
   z-index: 3;
 }
 
-.help-demo-detail {
-  animation: none;
-  box-sizing: border-box;
-  width: 100%;
-  margin: 0;
-}
+/* width/margin set after .detail — that rule otherwise wins and left-aligns. */
 
 .help-anno {
   display: flex;
@@ -1242,10 +1265,15 @@ body {
   border-right: 4px solid var(--pm-temp-color, var(--score-color));
   border-radius: 0 0 var(--radius) var(--radius);
   padding: 0.95rem 1.1rem 1.1rem;
-  margin: -2px 0 0;
+  /* Slightly narrower than the day card; center under it. */
+  margin: -2px auto 0;
   position: relative;
   z-index: 0;
   animation: unfurl 0.18s ease-out;
+}
+
+.detail.help-demo-detail {
+  animation: none;
 }
 
 @keyframes unfurl {
@@ -1677,12 +1705,6 @@ body {
     min-height: 0;
   }
 
-  .help-top {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 0.45rem 0.35rem 0.1rem;
-    gap: 0.4rem 0.35rem;
-  }
-
   /* Card uses full width; AM/PM edge notes drop below it as side-by-side cells. */
   .help-mid {
     grid-template-columns: 1fr 1fr;
@@ -1721,29 +1743,6 @@ body {
     border-width: 0 3.5px 5px;
     border-color: transparent transparent
       color-mix(in srgb, var(--text-muted) 55%, transparent);
-  }
-
-  /* Card is full width on mobile; stack the two bottom callouts on separate
-     rows so the wide "Tap a day" bubble never collides with "Current time". */
-  .help-bot {
-    height: 5.6rem;
-    margin: 0.1rem 0.2rem 0.45rem;
-  }
-
-  .help-anno-now {
-    left: 45.83%;
-  }
-
-  .help-anno-detail {
-    top: auto;
-    bottom: 0;
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-
-  .help-anno-detail .help-stem {
-    display: none;
   }
 
   .help-bubble {

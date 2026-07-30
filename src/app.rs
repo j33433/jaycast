@@ -515,15 +515,45 @@ fn LocationDialog(
 
 #[component]
 fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
-    // Static demo paths, chosen so clouds sit in the morning (left) and rain in
-    // the afternoon (right) — the two curves barely overlap, which reads clearly.
-    let cloud_path = cloud_wave_path(&[85.0, 92.0, 78.0, 55.0, 28.0, 12.0, 8.0, 6.0]);
-    let rain_path = rain_wave_path(&[0.0, 0.0, 0.0, 0.02, 0.09, 0.2, 0.16, 0.05]);
+    // Static demo paths: clouds morning-left, forecast rain peaks ~4am, gauge PM.
+    // 8×3h cloud %; pin callout at ~9am on the curve (same mapping as cloud_wave_path).
+    let cloud_3h = [85.0, 92.0, 78.0, 55.0, 28.0, 12.0, 8.0, 6.0];
+    let cloud_path = cloud_wave_path(&cloud_3h);
+    let cloud_pin_hour = 9.0_f64;
+    let cloud_pin_x = cloud_pin_hour / 24.0 * 100.0;
+    // Interpolate cloud % along the 8 control points for that hour.
+    let cloud_t = (cloud_pin_hour / 24.0) * (cloud_3h.len() - 1) as f64;
+    let cloud_i = cloud_t.floor() as usize;
+    let cloud_f = cloud_t - cloud_i as f64;
+    let cloud_pct = if cloud_i + 1 < cloud_3h.len() {
+        cloud_3h[cloud_i] * (1.0 - cloud_f) + cloud_3h[cloud_i + 1] * cloud_f
+    } else {
+        cloud_3h[cloud_3h.len() - 1]
+    };
+    // Clouds fill from the top; aim mid-fill (above the lower curve edge).
+    let cloud_edge_y = (cloud_pct.clamp(0.0, 100.0) / 100.0) * 52.0;
+    let cloud_pin_y = cloud_edge_y * 0.45;
+    let cloud_pin_style = format!("--pin-x:{cloud_pin_x:.2}%; --pin-y:{cloud_pin_y:.2}%");
+    // 8×3h buckets; peak at index 1 (≈4am). Same mapping as rain_wave_path.
+    let rain_3h = [0.06, 0.2, 0.1, 0.02, 0.0, 0.0, 0.0, 0.0];
+    let rain_peak_i = 1usize;
+    let rain_peak_in = rain_3h[rain_peak_i];
+    let rain_path = rain_wave_path(&rain_3h);
+    // viewBox % of the day-card (SVG is inset:0). Peak of the filled rain curve.
+    let rain_pin_x = rain_peak_i as f64 * 100.0 / (rain_3h.len() - 1) as f64;
+    let rain_pin_y = 100.0 - (rain_peak_in.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0;
+    let rain_pin_style = format!("--pin-x:{rain_pin_x:.2}%; --pin-y:{rain_pin_y:.2}%");
+    // Hourly tips; peak at hour 15 (3pm). Same mapping as rain_gauge_wave_path.
     let gauge_hourly = [
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.03, 0.07, 0.12, 0.18, 0.15,
         0.08, 0.03, 0.0, 0.0, 0.0, 0.0, 0.0,
     ];
+    let gauge_peak_i = 15usize;
+    let gauge_peak_in = gauge_hourly[gauge_peak_i];
     let gauge_path = rain_gauge_wave_path(&gauge_hourly);
+    let gauge_pin_x = gauge_peak_i as f64 * 100.0 / (gauge_hourly.len() - 1) as f64;
+    let gauge_pin_y = 100.0 - (gauge_peak_in.max(0.0) / 0.25).clamp(0.0, 1.0) * 54.0;
+    let gauge_pin_style = format!("--pin-x:{gauge_pin_x:.2}%; --pin-y:{gauge_pin_y:.2}%");
     let tint = day_card_style(0.72, Some(-4.0), Some(3.0));
 
     view! {
@@ -532,6 +562,9 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
             let rain_path = rain_path.clone();
             let gauge_path = gauge_path.clone();
             let tint = tint.clone();
+            let cloud_pin_style = cloud_pin_style.clone();
+            let rain_pin_style = rain_pin_style.clone();
+            let gauge_pin_style = gauge_pin_style.clone();
             view! {
                 <div class="help-backdrop" role="presentation" on:click=move |_| open.set(false)>
                     <section
@@ -564,28 +597,16 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                 "Stars estimate rideability from rain, surface model, temp, and wind. "
                                 "Each card is midnight to evening, left to right."
                             </p>
+                            <p>"Tap a day for the factor breakdown."</p>
                         </div>
                         <div class="help-card-stage">
-                            <div class="help-top">
-                                <div class="help-anno help-anno-down">
-                                    <span class="help-bubble">"Forecast cloud cover through the day"</span>
-                                    <span class="help-stem" aria-hidden="true"></span>
-                                </div>
-                                <div class="help-anno help-anno-down">
-                                    <span class="help-bubble">"Forecast rain (model)"</span>
-                                    <span class="help-stem" aria-hidden="true"></span>
-                                </div>
-                                <div class="help-anno help-anno-down">
-                                    <span class="help-bubble">"Measured rain from nearby gauges (curve)"</span>
-                                    <span class="help-stem" aria-hidden="true"></span>
-                                </div>
-                            </div>
                             <div class="help-mid">
                                 <div class="help-anno help-anno-right">
                                     <span class="help-bubble">"Cooler AM vs recent days (blue edge)"</span>
                                     <span class="help-stem" aria-hidden="true"></span>
                                 </div>
                                 <div class="help-demo">
+                                    <div class="help-demo-card-wrap">
                                     <div class="day-card today selected help-demo-card" style=tint.clone()>
                                         <svg
                                             class="cloud-wave"
@@ -653,6 +674,31 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                             </div>
                                         </div>
                                     </div>
+                                    <div
+                                        class="help-anno help-anno-pin help-anno-cloud-pin"
+                                        style=cloud_pin_style
+                                    >
+                                        <span class="help-bubble">"Forecast cloud cover through the day"</span>
+                                        <span class="help-stem" aria-hidden="true"></span>
+                                        <span class="help-pin" aria-hidden="true"></span>
+                                    </div>
+                                    <div
+                                        class="help-anno help-anno-pin help-anno-rain-pin"
+                                        style=rain_pin_style
+                                    >
+                                        <span class="help-bubble">"Forecast rain (model)"</span>
+                                        <span class="help-stem" aria-hidden="true"></span>
+                                        <span class="help-pin" aria-hidden="true"></span>
+                                    </div>
+                                    <div
+                                        class="help-anno help-anno-pin help-anno-gauge-pin"
+                                        style=gauge_pin_style
+                                    >
+                                        <span class="help-bubble">"Measured rain from nearby gauges"</span>
+                                        <span class="help-stem" aria-hidden="true"></span>
+                                        <span class="help-pin" aria-hidden="true"></span>
+                                    </div>
+                                    </div>
                                     <section class="detail help-demo-detail" style=tint>
                                         <p class="score-line">
                                             <span>"30% rain chance 8 AM-noon · 4° below avg AM"</span>
@@ -673,16 +719,6 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                 <div class="help-anno help-anno-left">
                                     <span class="help-stem" aria-hidden="true"></span>
                                     <span class="help-bubble">"Warmer PM vs recent days (red edge)"</span>
-                                </div>
-                            </div>
-                            <div class="help-bot">
-                                <div class="help-anno help-anno-up help-anno-now">
-                                    <span class="help-stem" aria-hidden="true"></span>
-                                    <span class="help-bubble">"Current time"</span>
-                                </div>
-                                <div class="help-anno help-anno-up help-anno-detail">
-                                    <span class="help-stem" aria-hidden="true"></span>
-                                    <span class="help-bubble">"Tap a day for factor breakdown"</span>
                                 </div>
                             </div>
                         </div>
