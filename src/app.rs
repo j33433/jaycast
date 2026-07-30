@@ -79,6 +79,7 @@ pub fn App() -> impl IntoView {
     let model = RwSignal::new(weather::load_model_pref());
     let trail = RwSignal::new(trails::load_trail_pref());
     let location_dialog_open = RwSignal::new(false);
+    let help_dialog_open = RwSignal::new(false);
     let grid_lat = RwSignal::new(0.0f64);
     let grid_lon = RwSignal::new(0.0f64);
     let theme = RwSignal::new(load_theme_pref().unwrap_or_else(detect_os_theme));
@@ -349,13 +350,23 @@ pub fn App() -> impl IntoView {
                         <br/>
                         {move || trail.get().location()}
                     </p>
-                    <button
-                        type="button"
-                        class="location-change"
-                        on:click=move |_| location_dialog_open.set(true)
-                    >
-                        "change location"
-                    </button>
+                    <div class="header-actions">
+                        <button
+                            type="button"
+                            class="location-change"
+                            on:click=move |_| location_dialog_open.set(true)
+                        >
+                            "change location"
+                        </button>
+                        <span class="header-action-sep" aria-hidden="true">"·"</span>
+                        <button
+                            type="button"
+                            class="help-open"
+                            on:click=move |_| help_dialog_open.set(true)
+                        >
+                            "help"
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -364,6 +375,7 @@ pub fn App() -> impl IntoView {
                 selected=trail
                 on_change=Callback::new(switch_trail)
             />
+            <HelpDialog open=help_dialog_open />
 
             {move || match state.get() {
                 LoadState::Loading => view! { <LoadingView /> }.into_any(),
@@ -493,6 +505,186 @@ fn LocationDialog(
                                     </button>
                                 }
                             }).collect_view()}
+                        </div>
+                    </section>
+                </div>
+            }
+        })}
+    }
+}
+
+#[component]
+fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
+    // Static demo paths, chosen so clouds sit in the morning (left) and rain in
+    // the afternoon (right) — the two curves barely overlap, which reads clearly.
+    let cloud_path = cloud_wave_path(&[85.0, 92.0, 78.0, 55.0, 28.0, 12.0, 8.0, 6.0]);
+    let rain_path = rain_wave_path(&[0.0, 0.0, 0.0, 0.02, 0.09, 0.2, 0.16, 0.05]);
+    let gauge_hourly = [
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.03, 0.07, 0.12, 0.18, 0.15,
+        0.08, 0.03, 0.0, 0.0, 0.0, 0.0, 0.0,
+    ];
+    let gauge_path = rain_gauge_wave_path(&gauge_hourly);
+    let tint = day_card_style(0.72, Some(-4.0), Some(3.0));
+
+    view! {
+        {move || open.get().then(|| {
+            let cloud_path = cloud_path.clone();
+            let rain_path = rain_path.clone();
+            let gauge_path = gauge_path.clone();
+            let tint = tint.clone();
+            view! {
+                <div class="help-backdrop" role="presentation" on:click=move |_| open.set(false)>
+                    <section
+                        class="help-dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="help-dialog-title"
+                        on:click=move |event| event.stop_propagation()
+                    >
+                        <div class="help-dialog-head">
+                            <div>
+                                <p class="label">"Guide"</p>
+                                <h2 id="help-dialog-title">"How to read a day"</h2>
+                            </div>
+                            <button
+                                type="button"
+                                class="dialog-close"
+                                aria-label="Close help"
+                                on:click=move |_| open.set(false)
+                            >
+                                "x"
+                            </button>
+                        </div>
+                        <div class="help-intro">
+                            <p>
+                                "Weather-aware trail scores for South Florida mountain bike parks. "
+                                "Not official trail status."
+                            </p>
+                            <p>
+                                "Stars estimate rideability from rain, surface model, temp, and wind. "
+                                "Each card is midnight to evening, left to right."
+                            </p>
+                        </div>
+                        <div class="help-card-stage">
+                            <div class="help-top">
+                                <div class="help-anno help-anno-down">
+                                    <span class="help-bubble">"Forecast cloud cover through the day"</span>
+                                    <span class="help-stem" aria-hidden="true"></span>
+                                </div>
+                                <div class="help-anno help-anno-down">
+                                    <span class="help-bubble">"Forecast rain (model)"</span>
+                                    <span class="help-stem" aria-hidden="true"></span>
+                                </div>
+                                <div class="help-anno help-anno-down">
+                                    <span class="help-bubble">"Measured rain from nearby gauges (curve)"</span>
+                                    <span class="help-stem" aria-hidden="true"></span>
+                                </div>
+                            </div>
+                            <div class="help-mid">
+                                <div class="help-anno help-anno-right">
+                                    <span class="help-bubble">"Cooler AM vs recent days (blue edge)"</span>
+                                    <span class="help-stem" aria-hidden="true"></span>
+                                </div>
+                                <div class="help-demo">
+                                    <div class="day-card today selected help-demo-card" style=tint.clone()>
+                                        <svg
+                                            class="cloud-wave"
+                                            viewBox="0 0 100 100"
+                                            preserveAspectRatio="none"
+                                            aria-hidden="true"
+                                            focusable="false"
+                                        >
+                                            <path d=cloud_path />
+                                        </svg>
+                                        <svg
+                                            class="rain-wave"
+                                            viewBox="0 0 100 100"
+                                            preserveAspectRatio="none"
+                                            aria-hidden="true"
+                                            focusable="false"
+                                        >
+                                            <path d=rain_path />
+                                        </svg>
+                                        <svg
+                                            class="rain-gauge"
+                                            viewBox="0 0 100 100"
+                                            preserveAspectRatio="none"
+                                            aria-hidden="true"
+                                            focusable="false"
+                                        >
+                                            <path d=gauge_path />
+                                        </svg>
+                                        <div class="hourly-ticks" aria-hidden="true">
+                                            {(0u32..24).map(|h| {
+                                                let left = format!("{:.2}%", h as f64 * 100.0 / 24.0);
+                                                let tall = h % 3 == 0;
+                                                let cls = if tall { "htick tall" } else { "htick" };
+                                                let label = match h {
+                                                    3 => Some("3a"),
+                                                    6 => Some("6a"),
+                                                    9 => Some("9a"),
+                                                    12 => Some("12p"),
+                                                    15 => Some("3p"),
+                                                    18 => Some("6p"),
+                                                    21 => Some("9p"),
+                                                    _ => None,
+                                                };
+                                                view! {
+                                                    <span class=cls style=format!("left:{left}")></span>
+                                                    {label.map(|l| view! {
+                                                        <span class="hlabel" style=format!("left:{left}")>{l}</span>
+                                                    })}
+                                                }
+                                            }).collect_view()}
+                                            <span class="now-marker" style="left:45.83%"></span>
+                                        </div>
+                                        <div class="date">
+                                            "Jul 18"
+                                            <span class="dow">"Today"</span>
+                                        </div>
+                                        <div class="mid">
+                                            <div class="stars-sm">"4.2 ★"</div>
+                                            <div class="blurb">"packed sand, light PM rain"</div>
+                                        </div>
+                                        <div class="precip">
+                                            "0.41\""
+                                            <div class="temp-row">
+                                                <span class="temp">"78° / 91°"</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <section class="detail help-demo-detail" style=tint>
+                                        <p class="score-line">
+                                            <span>"30% rain chance 8 AM-noon · 4° below avg AM"</span>
+                                            <span class="detail-meta">"partly cloudy +8%"</span>
+                                        </p>
+                                        <ul class="factors">
+                                            <li class="factor">
+                                                <span class="name">"Sand pack"</span>
+                                                <span class="contrib pos">"+18%"</span>
+                                                <span class="note">"0.4\" rain ~18h ago — good pack window"</span>
+                                                <div class="bar-track">
+                                                    <div class="bar-fill" style="width:82%"></div>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                    </section>
+                                </div>
+                                <div class="help-anno help-anno-left">
+                                    <span class="help-stem" aria-hidden="true"></span>
+                                    <span class="help-bubble">"Warmer PM vs recent days (red edge)"</span>
+                                </div>
+                            </div>
+                            <div class="help-bot">
+                                <div class="help-anno help-anno-up help-anno-now">
+                                    <span class="help-stem" aria-hidden="true"></span>
+                                    <span class="help-bubble">"Current time"</span>
+                                </div>
+                                <div class="help-anno help-anno-up help-anno-detail">
+                                    <span class="help-stem" aria-hidden="true"></span>
+                                    <span class="help-bubble">"Tap a day for factor breakdown"</span>
+                                </div>
+                            </div>
                         </div>
                     </section>
                 </div>

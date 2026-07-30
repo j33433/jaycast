@@ -72,7 +72,7 @@ jaycast/
 
 | File | Description |
 |------|-------------|
-| `style.css` | Application stylesheet. Florida scrub palette with dark (default) and light themes. CSS custom properties for jay blue, scrub green, sand, accent, warn, bad, star, rain. Styles for header, trail logo, location chooser dialog, hero, model toggle, theme toggle, weekend-warrior toggle, timeline nav, day cards (score-tinted gradients, AM/PM temp side borders, weekend/best/selected/past/today states), rain-wave and cloud-wave SVG backgrounds, detail panel with factor bars, vertical weekend comparison grid (day cards with trail rows, Best badge), footer, skeleton shimmer loader. Responsive breakpoint at 30rem. |
+| `style.css` | Application stylesheet. Florida scrub palette with dark (default) and light themes. CSS custom properties for jay blue, scrub green, sand, accent, warn, bad, star, rain. Styles for header, trail logo, location chooser dialog, help dialog (annotated demo day card with thought bubbles), hero, model toggle, theme toggle, weekend-warrior toggle, timeline nav, day cards (score-tinted gradients, AM/PM temp side borders, weekend/best/selected/past/today states), rain-wave and cloud-wave SVG backgrounds, detail panel with factor bars, vertical weekend comparison grid (day cards with trail rows, Best badge), footer, skeleton shimmer loader. Responsive breakpoint at 30rem. |
 | `jaycast-icon.png` | App icon / favicon / OG image. Referenced by `index.html` and `README.md`. |
 
 ## art/
@@ -105,8 +105,9 @@ Leptos UI component tree. All components and helpers are private.
 - `struct WeekendGridData { dates, map, best_per_day }` - pure data prep for the multi-trail comparison grid; `build(all, today)` indexes scored days by trail/date and picks Best per day
 
 **Components:**
-- `App()` - root; manages state signals (load state, selected day, view start, refreshed_at, model, trail, dialog, grid coords, theme, gauge_rain, first load, weekend_warrior, multi_days, multi_loading), runs single-trail fetch+score effect + 15-min auto-refresh loop (timeline only; grid is refreshed on toggle/model switch), `load_weekend` fetches history+forecast+gauge for all three trails; trail switch exits weekend view; model switch refreshes grid when open
+- `App()` - root; manages state signals (load state, selected day, view start, refreshed_at, model, trail, location/help dialogs, grid coords, theme, gauge_rain, first load, weekend_warrior, multi_days, multi_loading), runs single-trail fetch+score effect + 15-min auto-refresh loop (timeline only; grid is refreshed on toggle/model switch), `load_weekend` fetches history+forecast+gauge for all three trails; trail switch exits weekend view; model switch refreshes grid when open
 - `LocationDialog(open, selected, on_change)` - modal trail chooser
+- `HelpDialog(open)` - modal guide: short site explainer + static annotated day card (clouds, model rain, gauge rain, now marker, score, detail) with thought-bubble callouts
 - `LoadingView()` - skeleton loading state
 - `ErrorView(message, on_retry)` - error display with retry
 - `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, gauge_rain, weekend_warrior, multi_days, multi_loading, on_switch, on_select_trail, on_toggle_weekend)` - composes Hero + either Timeline or WeekendWarriorView + footer; `on_select_day` jumps from grid cell to trail timeline with that day selected
