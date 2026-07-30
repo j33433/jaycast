@@ -470,7 +470,12 @@ fn LocationDialog(
                                 aria-label="Close location chooser"
                                 on:click=move |_| open.set(false)
                             >
-                                "x"
+                                <svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                    </g>
+                                </svg>
                             </button>
                         </div>
                         <div class="location-options">
@@ -585,7 +590,12 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                 aria-label="Close help"
                                 on:click=move |_| open.set(false)
                             >
-                                "x"
+                                <svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                    </g>
+                                </svg>
                             </button>
                         </div>
                         <div class="help-intro">
@@ -597,15 +607,18 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                 "Stars estimate rideability from rain, surface model, temp, and wind. "
                                 "Each card is midnight to evening, left to right."
                             </p>
+                            <p class="help-edge-note">
+                                "Card edges show feels-like vs the prior week: "
+                                <span class="help-edge-cool">"blue = cooler"</span>
+                                ", "
+                                <span class="help-edge-warm">"red = warmer"</span>
+                                ". Left is morning, right is afternoon. "
+                                "This example shows an unusually cool morning."
+                            </p>
                             <p>"Tap a day for the factor breakdown."</p>
                         </div>
                         <div class="help-card-stage">
-                            <div class="help-mid">
-                                <div class="help-anno help-anno-right">
-                                    <span class="help-bubble">"Cooler AM vs recent days (blue edge)"</span>
-                                    <span class="help-stem" aria-hidden="true"></span>
-                                </div>
-                                <div class="help-demo">
+                            <div class="help-demo">
                                     <div class="help-demo-card-wrap">
                                     <div class="day-card today selected help-demo-card" style=tint.clone()>
                                         <svg
@@ -701,7 +714,7 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                     </div>
                                     <section class="detail help-demo-detail" style=tint>
                                         <p class="score-line">
-                                            <span>"30% rain chance 8 AM-noon · 4° below avg AM"</span>
+                                            <span>"rain 8 AM-noon · 4° below avg AM"</span>
                                             <span class="detail-meta">"partly cloudy +8%"</span>
                                         </p>
                                         <ul class="factors">
@@ -715,11 +728,6 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                             </li>
                                         </ul>
                                     </section>
-                                </div>
-                                <div class="help-anno help-anno-left">
-                                    <span class="help-stem" aria-hidden="true"></span>
-                                    <span class="help-bubble">"Warmer PM vs recent days (red edge)"</span>
-                                </div>
                             </div>
                         </div>
                     </section>
