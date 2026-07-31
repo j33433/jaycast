@@ -75,6 +75,53 @@
       }
     </script>
 
+    <script type="application/ld+json">
+      [
+        {
+          "@context": "https://schema.org",
+          "@type": "SportsActivityLocation",
+          "@id": "https://upload.bike/jaycast/about/#camp-murphy",
+          "name": "Camp Murphy MTB Trails",
+          "description": "Sandy scrub mountain bike trails at Jonathan Dickinson State Park, Florida. Sugar sand that firms up after rain.",
+          "url": "https://upload.bike/jaycast/?camp-murphy",
+          "geo": { "@type": "GeoCoordinates", "latitude": 27.0122609635, "longitude": -80.1108183762 },
+          "containedInPlace": {
+            "@type": "Park",
+            "name": "Jonathan Dickinson State Park",
+            "address": { "@type": "PostalAddress", "addressLocality": "Hobe Sound", "addressRegion": "FL", "addressCountry": "US" }
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "SportsActivityLocation",
+          "@id": "https://upload.bike/jaycast/about/#markham",
+          "name": "Markham Park Mountain Bike Trails",
+          "description": "Dirt and gravel mountain bike trails at Markham Park, Weston, Florida. They drain slowly and can stay closed after rain.",
+          "url": "https://upload.bike/jaycast/?markham",
+          "geo": { "@type": "GeoCoordinates", "latitude": 26.1298305195, "longitude": -80.3509035752 },
+          "containedInPlace": {
+            "@type": "Park",
+            "name": "Markham Park",
+            "address": { "@type": "PostalAddress", "addressLocality": "Sunrise", "addressRegion": "FL", "addressCountry": "US" }
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "SportsActivityLocation",
+          "@id": "https://upload.bike/jaycast/about/#quiet-waters",
+          "name": "Quiet Waters Park Mountain Bike Trails",
+          "description": "Mixed hardpack mountain bike trails at Quiet Waters Park, Deerfield Beach, Florida. Firm terrain that rarely stays closed.",
+          "url": "https://upload.bike/jaycast/?quiet-waters",
+          "geo": { "@type": "GeoCoordinates", "latitude": 26.3101229482, "longitude": -80.1611296846 },
+          "containedInPlace": {
+            "@type": "Park",
+            "name": "Quiet Waters Park",
+            "address": { "@type": "PostalAddress", "addressLocality": "Deerfield Beach", "addressRegion": "FL", "addressCountry": "US" }
+          }
+        }
+      ]
+    </script>
+
     <link data-trunk rel="icon" href="assets/jaycast-icon.png" />
     <link data-trunk rel="css" href="assets/style.css" />
     <link data-trunk rel="rust" data-type="main" data-wasm-opt="z" />
@@ -85,6 +132,7 @@
     <link data-trunk rel="copy-file" href="art/eaglecast-plain.svg" />
     <link data-trunk rel="copy-file" href="robots.txt" />
     <link data-trunk rel="copy-file" href="sitemap.xml" />
+    <link data-trunk rel="copy-dir" href="about" data-target-path="about" />
   </head>
   <body>
     <noscript>
@@ -95,10 +143,35 @@
           Camp Murphy (Jonathan Dickinson State Park), Markham Park (Weston),
           and Quiet Waters Park (Deerfield Beach).
         </p>
+        <h2>Camp Murphy MTB Trails</h2>
+        <p>
+          Sandy scrub trails at Jonathan Dickinson State Park, FL. Rides best
+          about 18 hours after meaningful rain, once the sand firms up and
+          before the sun dries it back. A long dry spell leaves the sugar sand
+          loose and slow.
+          <a href="https://upload.bike/jaycast/?camp-murphy">Camp Murphy forecast</a>
+        </p>
+        <h2>Markham Park Mountain Bike Trails</h2>
+        <p>
+          Dirt and gravel trails at Markham Park, Weston, FL that drain slowly.
+          Estimate 8.5 hours after rain ends, plus 8 hours per additional inch,
+          capped at 18.5 hours. Heavy afternoon rain can push reopening to the
+          next midday.
+          <a href="https://upload.bike/jaycast/?markham">Markham forecast</a>
+        </p>
+        <h2>Quiet Waters Park Mountain Bike Trails</h2>
+        <p>
+          Mixed hardpack trails at Quiet Waters Park, Deerfield Beach, FL that
+          stay fast even when dry. Rain only temporarily degrades the surface;
+          mud clears within about 14 hours.
+          <a href="https://upload.bike/jaycast/?quiet-waters">Quiet Waters forecast</a>
+        </p>
         <p>
           This app needs JavaScript and WebAssembly. Enable them, or open the
           live site on a modern browser:
           <a href="https://upload.bike/jaycast/">https://upload.bike/jaycast/</a>
+          · More about the trails:
+          <a href="https://upload.bike/jaycast/about/">https://upload.bike/jaycast/about/</a>
         </p>
         <p>
           Source:

@@ -13,6 +13,8 @@ jaycast/
   robots.txt
   sitemap.xml
   README.md
+  about/
+    index.html
   doc/
     CLI.md
     CODEMAP.md
@@ -59,9 +61,10 @@ jaycast/
 | `Cargo.lock` | Dependency lockfile (auto-generated). |
 | `LICENSE` | GPL-3.0-or-later. |
 | `Trunk.toml` | Trunk build config. Target `index.html`, dist dir `dist/`, public URL `/jaycast/`. |
-| `index.html` | App entry HTML. Inline JS applies saved theme before render. OpenGraph/Twitter meta, JSON-LD structured data. Trunk asset links for icon, CSS, WASM, and copy-file directives for SVGs, LICENSE, robots.txt, sitemap.xml. |
+| `index.html` | App entry HTML. Inline JS applies saved theme before render. OpenGraph/Twitter meta, JSON-LD structured data (WebApplication + three SportsActivityLocation/Place). Trunk asset links for icon, CSS, WASM, and copy-file/copy-dir directives for SVGs, LICENSE, robots.txt, sitemap.xml, and the `about/` page. |
 | `robots.txt` | Allows `/jaycast/`, declares sitemap URL. |
-| `sitemap.xml` | Single URL entry for the deployed site. |
+| `sitemap.xml` | URLs: home (daily) and the about page (monthly). |
+| `about/index.html` | Static, JS-free landing page served at `/jaycast/about/`. Trail guides for the three parks, how scoring works, FAQ. JSON-LD: `AboutPage`, `FAQPage`, `WebSite`, three `SportsActivityLocation`/`Place` with geo. Copied to `dist/about/` via Trunk `copy-dir`. Deep links into the app with `?camp-murphy`/`?markham`/`?quiet-waters`. |
 | `README.md` | Project description, trail profiles, weekend comparison grid, develop/test/build instructions, CLI usage, score model summary. |
 | `doc/CLI.md` | CLI reference with examples for `analyze`, `backtest`, `xweather publish/dump/rescan`. |
 | `doc/CODEMAP.md` | This file — file-level map of the project. |

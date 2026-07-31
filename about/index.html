@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1a1712" />
+    <title>About jaycast · South Florida MTB trail conditions</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("jaycast:theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.setAttribute("data-theme", t);
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute("content", t === "light" ? "#f3ebe0" : "#1a1712");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <meta
+      name="description"
+      content="How jaycast scores rideability for Camp Murphy (Jonathan Dickinson), Markham Park, and Quiet Waters Park mountain bike trails after rain. Surface guides and trail conditions."
+    />
+    <link rel="canonical" href="https://upload.bike/jaycast/about/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="jaycast" />
+    <meta property="og:title" content="About jaycast · South Florida MTB trail conditions" />
+    <meta
+      property="og:description"
+      content="Weather-informed rideability forecasts for Camp Murphy, Markham Park, and Quiet Waters Park mountain bike trails."
+    />
+    <meta property="og:url" content="https://upload.bike/jaycast/about/" />
+    <meta property="og:image" content="https://upload.bike/jaycast/jaycast-icon.png" />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="About jaycast · South Florida MTB trail conditions" />
+    <meta
+      name="twitter:description"
+      content="Weather-informed rideability forecasts for Camp Murphy, Markham Park, and Quiet Waters Park mountain bike trails."
+    />
+    <meta name="twitter:image" content="https://upload.bike/jaycast/jaycast-icon.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "AboutPage",
+            "@id": "https://upload.bike/jaycast/about/#page",
+            "url": "https://upload.bike/jaycast/about/",
+            "name": "About jaycast · South Florida MTB trail conditions",
+            "description": "How jaycast scores rideability for Camp Murphy, Markham Park, and Quiet Waters Park mountain bike trails after rain.",
+            "isPartOf": {
+              "@id": "https://upload.bike/jaycast/#website"
+            },
+            "mainEntity": {
+              "@id": "https://upload.bike/jaycast/about/#faq"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://upload.bike/jaycast/#website",
+            "url": "https://upload.bike/jaycast/",
+            "name": "jaycast",
+            "description": "Weather-informed rideability forecasts for South Florida MTB trails.",
+            "publisher": {
+              "@type": "Organization",
+              "name": "jaycast",
+              "url": "https://upload.bike/jaycast/"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://upload.bike/jaycast/about/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is Markham Park rideable after rain?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Markham's dirt and gravel trails drain slowly. jaycast estimates a base of 8.5 hours after rain ends, plus 8 hours per additional inch, capped at 18.5 hours. Heavy afternoon rain can push reopening to the next midday."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "When is Camp Murphy best to ride?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Camp Murphy's sugar sand rides best roughly 18 hours after meaningful rain, once the sand firms up and before the sun bakes it back to powder. A long dry spell leaves it loose and slow."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does jaycast score the trails?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Each trail gets a 1.0 to 5.0 star score from a weather-informed model: surface pack or drainage timing, ride-window rain, temperature, wind, sky, and forecast confidence. Scores are advisory, not official park status."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I still need to check official park status?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. jaycast forecasts conditions but is not an official trail status service. Parks can close for reasons weather models cannot see, so check local reports and official notices before heading out."
+                }
+              }
+            ]
+          },
+          {
+            "@type": "SportsActivityLocation",
+            "@id": "https://upload.bike/jaycast/about/#camp-murphy",
+            "name": "Camp Murphy MTB Trails",
+            "description": "Sandy scrub mountain bike trails at Jonathan Dickinson State Park, Florida. Sugar sand that firms up after rain.",
+            "url": "https://upload.bike/jaycast/?camp-murphy",
+            "geo": { "@type": "GeoCoordinates", "latitude": 27.0122609635, "longitude": -80.1108183762 },
+            "containedInPlace": {
+              "@type": "Park",
+              "name": "Jonathan Dickinson State Park",
+              "address": { "@type": "PostalAddress", "addressLocality": "Hobe Sound", "addressRegion": "FL", "addressCountry": "US" }
+            }
+          },
+          {
+            "@type": "SportsActivityLocation",
+            "@id": "https://upload.bike/jaycast/about/#markham",
+            "name": "Markham Park Mountain Bike Trails",
+            "description": "Dirt and gravel mountain bike trails at Markham Park, Weston, Florida. They drain slowly and can stay closed after rain.",
+            "url": "https://upload.bike/jaycast/?markham",
+            "geo": { "@type": "GeoCoordinates", "latitude": 26.1298305195, "longitude": -80.3509035752 },
+            "containedInPlace": {
+              "@type": "Park",
+              "name": "Markham Park",
+              "address": { "@type": "PostalAddress", "addressLocality": "Sunrise", "addressRegion": "FL", "addressCountry": "US" }
+            }
+          },
+          {
+            "@type": "SportsActivityLocation",
+            "@id": "https://upload.bike/jaycast/about/#quiet-waters",
+            "name": "Quiet Waters Park Mountain Bike Trails",
+            "description": "Mixed hardpack mountain bike trails at Quiet Waters Park, Deerfield Beach, Florida. Firm terrain that rarely stays closed.",
+            "url": "https://upload.bike/jaycast/?quiet-waters",
+            "geo": { "@type": "GeoCoordinates", "latitude": 26.3101229482, "longitude": -80.1611296846 },
+            "containedInPlace": {
+              "@type": "Park",
+              "name": "Quiet Waters Park",
+              "address": { "@type": "PostalAddress", "addressLocality": "Deerfield Beach", "addressRegion": "FL", "addressCountry": "US" }
+            }
+          }
+        ]
+      }
+    </script>
+
+    <style>
+      :root {
+        --bg: #1a1712;
+        --bg-elev: #262118;
+        --bg-card: #2c261c;
+        --border: #3d3528;
+        --text: #f0e6d4;
+        --text-muted: #a89880;
+        --jay: #4a9fd4;
+        --scrub: #6a8f4e;
+        --sand: #c4a574;
+        --accent: var(--jay);
+        --btn-text: #0e1a22;
+        --radius: 12px;
+        --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+      :root[data-theme="light"] {
+        --bg: #f3ebe0;
+        --bg-elev: #fffaf3;
+        --bg-card: #fffaf3;
+        --border: #d4c4a8;
+        --text: #2a2418;
+        --text-muted: #6b5e48;
+        --jay: #2f7eb0;
+        --scrub: #4f7340;
+        --sand: #b8956a;
+        --accent: var(--jay);
+        --btn-text: #f7fbfe;
+      }
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme]) {
+          --bg: #f3ebe0;
+          --bg-elev: #fffaf3;
+          --bg-card: #fffaf3;
+          --border: #d4c4a8;
+          --text: #2a2418;
+          --text-muted: #6b5e48;
+          --jay: #2f7eb0;
+          --scrub: #4f7340;
+          --sand: #b8956a;
+          --accent: var(--jay);
+          --btn-text: #f7fbfe;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        line-height: 1.55;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 4rem;
+      }
+      header {
+        text-align: center;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 2rem;
+      }
+      header img {
+        width: 72px;
+        height: 72px;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0.75rem 0 0.5rem;
+      }
+      h2 {
+        font-size: 1.4rem;
+        margin-top: 2.5rem;
+        color: var(--sand);
+      }
+      p {
+        margin: 0.75rem 0;
+      }
+      .muted {
+        color: var(--text-muted);
+      }
+      .trails {
+        display: grid;
+        gap: 1rem;
+      }
+      article.trail {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.25rem;
+      }
+      article.trail h3 {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin: 0 0 0.5rem;
+        font-size: 1.15rem;
+      }
+      article.trail h3 img {
+        width: 40px;
+        height: 40px;
+      }
+      article.trail .where {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+      }
+      a.cta {
+        display: inline-block;
+        margin-top: 0.75rem;
+        background: var(--accent);
+        color: var(--btn-text);
+        font-weight: 600;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+      }
+      a {
+        color: var(--jay);
+      }
+      ul {
+        padding-left: 1.25rem;
+      }
+      li {
+        margin: 0.4rem 0;
+      }
+      dl.faq {
+        margin: 0;
+      }
+      dl.faq dt {
+        font-weight: 600;
+        color: var(--sand);
+        margin-top: 1.25rem;
+      }
+      dl.faq dd {
+        margin: 0.3rem 0 0;
+      }
+      footer {
+        margin-top: 3rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        text-align: center;
+      }
+      @media (min-width: 40rem) {
+        .trails {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="/jaycast/jaycast-icon.png" alt="jaycast icon" width="72" height="72" />
+        <h1>About jaycast</h1>
+        <p class="muted">
+          Weather-informed rideability forecasts for South Florida mountain bike
+          trails. Pick a park, check the stars, decide.
+        </p>
+        <p>
+          <a class="cta" href="/jaycast/">Open the live forecast</a>
+        </p>
+      </header>
+
+      <section>
+        <h2>The trails</h2>
+        <p>
+          jaycast covers three South Florida MTB parks, each with a different
+          surface and a different response to rain. Forecasts come from
+          Open-Meteo (GFS or ECMWF) and nearby rain gauges when available. Scores
+          are advisory only and are not official park status.
+        </p>
+
+        <div class="trails">
+          <article class="trail">
+            <h3>
+              <img src="/jaycast/jaycast-plain.svg" alt="" width="40" height="40" />
+              Camp Murphy MTB Trails
+            </h3>
+            <p class="where">Jonathan Dickinson State Park, FL · sandy scrub</p>
+            <p>
+              Coarse sugar sand under a light canopy. It rides loose and slow when
+              bone-dry and firms up after rain. There is no mud to speak of; this
+              is Florida sand over limestone.
+            </p>
+            <ul>
+              <li>Best: about 18 hours after meaningful rain, before the sun dries it back.</li>
+              <li>Worst: a long dry spell, which bottoms out the pack.</li>
+              <li>The trail never officially closes, but dry sand is hard work.</li>
+            </ul>
+            <a class="cta" href="/jaycast/?camp-murphy">View Camp Murphy forecast</a>
+          </article>
+
+          <article class="trail">
+            <h3>
+              <img src="/jaycast/gatorcast-plain.svg" alt="" width="40" height="40" />
+              Markham Park Mountain Bike Trails
+            </h3>
+            <p class="where">Weston, FL · dirt and gravel</p>
+            <p>
+              Dirt and gravel trails that drain slowly. Rain closes them not by
+              ranger decree but because riding wet dirt chews up the surface. The
+              county may also post official closures.
+            </p>
+            <ul>
+              <li>Base drain time: 8.5 hours after rain ends, plus 8 hours per additional inch.</li>
+              <li>Rain overnight usually clears by midday; heavy afternoon rain can push reopening to the next day.</li>
+              <li>Short showers under 0.10 in are ignored.</li>
+            </ul>
+            <a class="cta" href="/jaycast/?markham">View Markham forecast</a>
+          </article>
+
+          <article class="trail">
+            <h3>
+              <img src="/jaycast/eaglecast-plain.svg" alt="" width="40" height="40" />
+              Quiet Waters Park Mountain Bike Trails
+            </h3>
+            <p class="where">Deerfield Beach, FL · mixed hardpack</p>
+            <p>
+              Firm terrain that stays fast even when dry. A thin layer of loose
+              material over a hard base means puddles and slick roots are the worst
+              of it after rain.
+            </p>
+            <ul>
+              <li>The dry baseline score starts near the top.</li>
+              <li>Rain only temporarily degrades the surface; mud clears within about 14 hours.</li>
+              <li>Weather comfort (temperature, wind) matters more here than surface.</li>
+            </ul>
+            <a class="cta" href="/jaycast/?quiet-waters">View Quiet Waters forecast</a>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>How scoring works</h2>
+        <p>
+          Every day gets a star score from 1.0 to 5.0. The model blends surface
+          conditions (pack quality or drainage timing), weather (temperature,
+          wind, sky), and forecast confidence. Each trail is tuned differently:
+          Camp Murphy is a sand-pack model, Markham is a drainage advisory, and
+          Quiet Waters weights comfort weather more because its surface stays
+          rideable.
+        </p>
+        <p>
+          The timeline shows yesterday through the next week. Tap a day for a
+          factor breakdown, and use the grid view to compare all three parks at
+          once. Units are inches and degrees Fahrenheit.
+        </p>
+      </section>
+
+      <section>
+        <h2>Frequently asked questions</h2>
+        <dl class="faq">
+          <dt>Is Markham Park rideable after rain?</dt>
+          <dd>
+            Markham's dirt and gravel trails drain slowly. jaycast estimates a
+            base of 8.5 hours after rain ends, plus 8 hours per additional inch,
+            capped at 18.5 hours. Heavy afternoon rain can push reopening to the
+            next midday.
+          </dd>
+          <dt>When is Camp Murphy best to ride?</dt>
+          <dd>
+            Camp Murphy's sugar sand rides best roughly 18 hours after meaningful
+            rain, once the sand firms up and before the sun bakes it back to
+            powder. A long dry spell leaves it loose and slow.
+          </dd>
+          <dt>How does jaycast score the trails?</dt>
+          <dd>
+            Each trail gets a 1.0 to 5.0 star score from a weather-informed model:
+            surface pack or drainage timing, ride-window rain, temperature, wind,
+            sky, and forecast confidence. Scores are advisory, not official park
+            status.
+          </dd>
+          <dt>Do I still need to check official park status?</dt>
+          <dd>
+            Yes. jaycast forecasts conditions but is not an official trail status
+            service. Parks can close for reasons weather models cannot see, so
+            check local reports and official notices before heading out.
+          </dd>
+        </dl>
+      </section>
+
+      <footer>
+        <p>
+          <a href="/jaycast/">Live forecast</a> ·
+          <a href="https://github.com/j33433/jaycast">source</a> ·
+          <a href="mailto:upload.bike@gmail.com">contact</a>
+        </p>
+        <p class="muted">
+          Not official trail status. Forecast data by Open-Meteo; ground-truth rain
+          by Xweather. Use judgment and local reports.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>
