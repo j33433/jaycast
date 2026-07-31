@@ -133,8 +133,9 @@ impl Params {
                 params.pack_fade_hours = 120.0;
                 params.dry_timing_floor = 0.90;
                 // Jul 18 2026: prior-day afternoon storm (rain end ~5 PM) was not
-                // muddy by morning. 14h clear window drops typical PM convection.
-                params.mud_clear_hours = 14.0;
+                // muddy by morning. 10h clear window: rain ending by ~10 PM is
+                // rideable by the next 8 AM window; later evening rain stays wet.
+                params.mud_clear_hours = 10.0;
                 // QW never closes and degrades slowly, so be more generous with
                 // ride-window rain thresholds and the fresh-rain timing curve.
                 params.ride_day_precip_soft = 0.12;

@@ -90,7 +90,7 @@ conditions and more on weather.
 - The **dry baseline is high** (0.90). Even with no recent rain the surface
   quality starts near the top.
 - Rain only **temporarily degrades** the surface. The mud penalty clears after
-  14 hours.
+  10 hours: rain ending by ~10 PM is rideable by the next 8 AM window.
 - The timing peak is at **30 hours** after rain — a wider, gentler window than
   Camp Murphy's 18h peak. Pack fade takes roughly 5 days.
 - Ride-window rain thresholds are **more generous** (0.12 in soft, 0.70 in hard
@@ -101,7 +101,7 @@ comfort) matters more than surface here since surface quality is consistently
 high.
 
 **Field verification:** On July 18, 2026, an afternoon storm ending around 5 PM
-left no mud by the following morning, confirming the 14-hour mud clear window.
+left no mud by the following morning, consistent with a 10-hour mud clear window.
 
 **Gauge station:** PWS_363636363
 
