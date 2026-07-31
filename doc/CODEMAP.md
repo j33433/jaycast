@@ -263,8 +263,8 @@ Open-Meteo weather client. Private module `types` re-exported.
 **Constants:**
 - `pub const TIMEZONE: &str = "America/New_York"`
 - `pub const PAST_DAYS: u32 = 30` - archive history depth
-- `pub const FORECAST_DAYS: u32 = 8` - today + next 7
-- `pub const VIEW_DAYS: usize = 9` - yesterday + today + next 7
+- `pub const FORECAST_DAYS: u32 = 6` - today + next 5
+- `pub const VIEW_DAYS: usize = 7` - yesterday + today + next 5
 
 **Types:**
 - `enum WeatherModel { GfsSeamless, Ecmwf }`

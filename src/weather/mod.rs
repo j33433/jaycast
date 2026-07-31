@@ -13,10 +13,10 @@ pub const TIMEZONE: &str = "America/New_York";
 
 /// Past days of history (pack model lookback + browseable archive).
 pub const PAST_DAYS: u32 = 30;
-/// Forecast days to score and display (today + next 7).
-pub const FORECAST_DAYS: u32 = 8;
-/// Days shown in the timeline window at once (yesterday + today + next 7).
-pub const VIEW_DAYS: usize = 9;
+/// Forecast days to score and display (today + next 5).
+pub const FORECAST_DAYS: u32 = 6;
+/// Days shown in the timeline window at once (yesterday + today + next 5).
+pub const VIEW_DAYS: usize = 7;
 
 const CACHE_TTL_SECS: i64 = 30 * 60; // 30 minutes
 const MODEL_PREF_KEY: &str = "jaycast:model-pref";
@@ -59,7 +59,7 @@ impl WeatherModel {
 
     fn cache_key(self, trail: Trail) -> String {
         format!(
-            "jaycast:om:v12:{}:{}",
+            "jaycast:om:v13:{}:{}",
             trail.slug(),
             self.short().to_lowercase()
         )

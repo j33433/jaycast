@@ -27,7 +27,7 @@ Park choice is remembered. Share a direct link with `?camp-murphy`, `?markham`, 
 ## What you see
 
 - **Star score** (1.0-5.0) for each day: how rideable it looks, not official park status
-- **Timeline**: yesterday through the next week, color-tinted by score
+- **Timeline**: yesterday through the next five days, color-tinted by score
 - **Rain and clouds** on each day card (midnight to evening)
 - **Cooler / warmer** cues on the card edges vs the prior week
 - **Why**: tap a day for a factor breakdown (surface, rain window, temp, wind)
