@@ -69,6 +69,7 @@ XWEATHER_API_KEY='...' cargo run --features cli --bin jaycast -- \
 - Prefer `ob.trustFactor` ≥ 80 and `QCcode` 10 when present.
 - If `ob.dateTimeISO` is >2–3 hours stale, treat as offline.
 - `precip: null` → incomplete; don't invent missing rain.
+- Secondary must not be colocated with primary (same site / dual MADIS+PWS IDs).
 - Re-run `xweather rescan` periodically; PWS IDs and trust can change.
 
 ## Quick reference

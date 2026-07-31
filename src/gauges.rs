@@ -39,6 +39,12 @@ pub fn stations_for_trail(trail: Trail) -> &'static [GaugeSpec] {
                 lat: 26.967_62,
                 lon: -80.097_37,
             },
+            GaugeSpec {
+                id: "PWS_LPWS9943",
+                role: "secondary",
+                lat: 27.082_75,
+                lon: -80.137_07,
+            },
         ],
         Trail::QuietWaters => &[
             GaugeSpec {

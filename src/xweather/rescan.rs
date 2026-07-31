@@ -18,6 +18,8 @@ const MAX_DISTANCE_MI: f64 = 15.0;
 const PRIMARY_MAX_MI: f64 = 5.0;
 /// Emergency fallback only — never auto-recommended as primary.
 const BACKUP_MAX_MI: f64 = 10.0;
+/// Same physical site (MADIS/PWS dual IDs). Do not pair as primary+secondary.
+const COLOCATED_MAX_MI: f64 = 0.05;
 const TRACE_IN: f64 = 0.01;
 const REF_WET_FOR_STUCK: usize = 2;
 /// Known bad rain meters (always reject).
@@ -243,7 +245,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<(), String> {
 
 pub fn print_help() {
     eprintln!(
-        "Usage:\n  jaycast xweather rescan [camp-murphy|markham|quiet-waters] [--limit N] [--days N] [--candidates N]\n\nFinds nearby PWS/mesonet stations, rejects bad/missing rain meters, ranks by distance tier.\nPrimary ≤{PRIMARY_MAX_MI:.0} mi, backup ≤{BACKUP_MAX_MI:.0} mi; conditions MAE is only a tie-break.\nDoes not change the feed station table (print-only).\n\nDefaults: --limit {DEFAULT_CLOSEST_LIMIT}  --days {DEFAULT_QC_DAYS}  --candidates {DEFAULT_QC_CANDIDATES}"
+        "Usage:\n  jaycast xweather rescan [camp-murphy|markham|quiet-waters] [--limit N] [--days N] [--candidates N]\n\nFinds nearby PWS/mesonet stations, rejects bad/missing rain meters, ranks by distance tier.\nPrimary ≤{PRIMARY_MAX_MI:.0} mi, backup ≤{BACKUP_MAX_MI:.0} mi; conditions MAE is only a tie-break.\nSecondary must not be colocated with primary (<{COLOCATED_MAX_MI} mi); prefers a different network.\nDoes not change the feed station table (print-only).\n\nDefaults: --limit {DEFAULT_CLOSEST_LIMIT}  --days {DEFAULT_QC_DAYS}  --candidates {DEFAULT_QC_CANDIDATES}"
     );
 }
 
@@ -583,8 +585,13 @@ fn print_tier_table(
             .get(&r.id)
             .map(|p| format!("{:.0}%", p * 100.0))
             .unwrap_or_else(|| "-".into());
+        let site_note = if i > 0 && colocated(rows[0], r) {
+            format!("  ~same site as {}", rows[0].id)
+        } else {
+            String::new()
+        };
         println!(
-            "  {:3} {:20} {:>6}  {:>5}  {:>3}/{:<3}  {:>5}  {:4.2}\"  {:>6}  {:>5}  {}",
+            "  {:3} {:20} {:>6}  {:>5}  {:>3}/{:<3}  {:>5}  {:4.2}\"  {:>6}  {:>5}  {}{}",
             i + 1,
             r.id,
             fmt_mi(r.distance_mi),
@@ -595,7 +602,8 @@ fn print_tier_table(
             r.max_day_in,
             mae,
             trust,
-            r.place
+            r.place,
+            site_note
         );
         print!(
             "       last_ob={}  days:",
@@ -629,14 +637,7 @@ fn print_recommendation(
     }
 
     let primary = primary_ok[0];
-    // Prefer a secondary with a different network (PWS vs MADIS) when possible.
-    let primary_net = NetworkKind::of(&primary.id);
-    let secondary = primary_ok
-        .iter()
-        .skip(1)
-        .find(|s| NetworkKind::of(&s.id) != primary_net)
-        .copied()
-        .or_else(|| primary_ok.get(1).copied());
+    let (secondary, colocated_skips) = pick_secondary(primary, primary_ok);
 
     print!(
         "recommend: primary={} ({}, {})",
@@ -653,6 +654,17 @@ fn print_recommendation(
         );
     }
     println!();
+    for note in &colocated_skips {
+        println!("note: {note}");
+    }
+    if secondary.is_none()
+        && !colocated_skips.is_empty()
+        && primary_ok.len() == 1 + colocated_skips.len()
+    {
+        println!(
+            "note: no geographically distinct secondary within {PRIMARY_MAX_MI:.0} mi primary tier"
+        );
+    }
 
     let feed_ids: BTreeSet<&str> = current.iter().map(|(id, _)| *id).collect();
     let rec_ids: BTreeSet<&str> = std::iter::once(primary.id.as_str())
@@ -679,6 +691,43 @@ fn print_recommendation(
     if let Some(s) = secondary {
         print_station_spec(s, "secondary");
     }
+}
+
+/// True when both stations have coords and sit within [`COLOCATED_MAX_MI`].
+fn colocated(a: &RankedStation, b: &RankedStation) -> bool {
+    if !(a.lat.is_finite() && a.lon.is_finite() && b.lat.is_finite() && b.lon.is_finite()) {
+        return false;
+    }
+    haversine_mi(a.lat, a.lon, b.lat, b.lon) < COLOCATED_MAX_MI
+}
+
+/// Secondary must not share a site with primary. Prefer a different network among the rest.
+fn pick_secondary<'a>(
+    primary: &RankedStation,
+    primary_ok: &[&'a RankedStation],
+) -> (Option<&'a RankedStation>, Vec<String>) {
+    let primary_net = NetworkKind::of(&primary.id);
+    let mut skipped = Vec::new();
+    let mut best_diff_net: Option<&'a RankedStation> = None;
+    let mut best_any: Option<&'a RankedStation> = None;
+
+    for s in primary_ok.iter().skip(1).copied() {
+        if colocated(primary, s) {
+            let mi = haversine_mi(primary.lat, primary.lon, s.lat, s.lon);
+            skipped.push(format!(
+                "skipped {} (colocated with {}, {mi:.2} mi)",
+                s.id, primary.id
+            ));
+            continue;
+        }
+        if best_any.is_none() {
+            best_any = Some(s);
+        }
+        if best_diff_net.is_none() && NetworkKind::of(&s.id) != primary_net {
+            best_diff_net = Some(s);
+        }
+    }
+    (best_diff_net.or(best_any), skipped)
 }
 
 fn print_station_spec(s: &RankedStation, role: &str) {
@@ -1229,41 +1278,89 @@ mod tests {
         assert_eq!(NetworkKind::of("KFXE"), NetworkKind::Other);
     }
 
-    #[test]
-    fn closer_beats_better_mae_within_primary_tier() {
-        let near = RankedStation {
-            id: "NEAR".into(),
-            distance_mi: 1.7,
-            lat: 0.0,
-            lon: 0.0,
+    fn ranked(id: &str, distance_mi: f64, lat: f64, lon: f64) -> RankedStation {
+        RankedStation {
+            id: id.into(),
+            distance_mi,
+            lat,
+            lon,
             place: String::new(),
             trust: Some(100.0),
             last_ob: None,
             wet_days: 3,
             ref_wet_days: 6,
-            mae_in: Some(0.20),
+            mae_in: Some(0.10),
             max_day_in: 0.5,
             day_totals: vec![],
-        };
-        let far = RankedStation {
-            id: "FAR".into(),
-            distance_mi: 3.7,
-            lat: 0.0,
-            lon: 0.0,
-            place: String::new(),
-            trust: Some(100.0),
-            last_ob: None,
-            wet_days: 4,
-            ref_wet_days: 6,
-            mae_in: Some(0.08),
-            max_day_in: 0.5,
-            day_totals: vec![],
-        };
+        }
+    }
+
+    #[test]
+    fn closer_beats_better_mae_within_primary_tier() {
+        let near = ranked("NEAR", 1.7, 0.0, 0.0);
+        let mut far = ranked("FAR", 3.7, 0.0, 0.0);
+        far.wet_days = 4;
+        far.mae_in = Some(0.08);
         let peers = BTreeMap::new();
         assert_eq!(
             compare_stations(&near, &far, &peers),
             std::cmp::Ordering::Less
         );
+    }
+
+    #[test]
+    fn colocated_detects_camp_murphy_pair() {
+        // MID_C8019 / PWS_JOE4SPEED coords from gauges.rs (~12 m apart).
+        let a = ranked("MID_C8019", 3.2, 26.967_510, -80.097_351);
+        let b = ranked("PWS_JOE4SPEED", 3.2, 26.967_62, -80.097_37);
+        assert!(colocated(&a, &b));
+        let far = ranked("OTHER", 4.0, 27.01, -80.11);
+        assert!(!colocated(&a, &far));
+    }
+
+    #[test]
+    fn pick_secondary_skips_colocated_prefers_distinct_network() {
+        let primary = ranked("MID_C8019", 3.2, 26.967_510, -80.097_351);
+        let twin = ranked("PWS_JOE4SPEED", 3.2, 26.967_62, -80.097_37);
+        let other_madis = ranked("MID_OTHER", 4.0, 27.02, -80.12);
+        let other_pws = ranked("PWS_OTHER", 4.1, 27.03, -80.13);
+        let list = [&primary, &twin, &other_madis, &other_pws];
+        let (sec, skips) = pick_secondary(&primary, &list);
+        assert_eq!(sec.map(|s| s.id.as_str()), Some("PWS_OTHER"));
+        assert_eq!(skips.len(), 1);
+        assert!(skips[0].contains("PWS_JOE4SPEED"));
+    }
+
+    #[test]
+    fn pick_secondary_accepts_same_network_when_not_colocated() {
+        let primary = ranked("MID_A", 1.0, 26.0, -80.0);
+        let twin = ranked("PWS_TWIN", 1.0, 26.000_01, -80.000_01);
+        let other = ranked("MID_B", 2.5, 26.03, -80.03);
+        let list = [&primary, &twin, &other];
+        let (sec, skips) = pick_secondary(&primary, &list);
+        assert_eq!(sec.map(|s| s.id.as_str()), Some("MID_B"));
+        assert_eq!(skips.len(), 1);
+    }
+
+    #[test]
+    fn pick_secondary_none_when_only_colocated() {
+        let primary = ranked("MID_C8019", 3.2, 26.967_510, -80.097_351);
+        let twin = ranked("PWS_JOE4SPEED", 3.2, 26.967_62, -80.097_37);
+        let list = [&primary, &twin];
+        let (sec, skips) = pick_secondary(&primary, &list);
+        assert!(sec.is_none());
+        assert_eq!(skips.len(), 1);
+    }
+
+    #[test]
+    fn pick_secondary_keeps_network_pref_among_distinct_sites() {
+        let primary = ranked("MID_A", 1.0, 26.0, -80.0);
+        let same_net = ranked("MID_B", 2.0, 26.02, -80.02);
+        let diff_net = ranked("PWS_C", 2.5, 26.03, -80.03);
+        let list = [&primary, &same_net, &diff_net];
+        let (sec, skips) = pick_secondary(&primary, &list);
+        assert_eq!(sec.map(|s| s.id.as_str()), Some("PWS_C"));
+        assert!(skips.is_empty());
     }
 
     #[test]
