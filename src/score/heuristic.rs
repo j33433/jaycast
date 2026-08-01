@@ -135,7 +135,7 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
             if apparent_am <= avg_am - COMFORT_THRESHOLD {
                 let delta = (avg_am - apparent_am).round();
                 forecasts[i].comfort_note = Some("AM".into());
-                forecasts[i].comfort_detail = Some(format!("{delta:.0}° below avg AM"));
+                forecasts[i].comfort_detail = Some(format!("{delta:.0}° below average AM"));
             }
         }
         if pm_vals.len() >= 3 && apparent_pm > 0.0 {
@@ -146,7 +146,7 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
             {
                 let delta = (avg_pm - apparent_pm).round();
                 forecasts[i].comfort_note = Some("PM".into());
-                forecasts[i].comfort_detail = Some(format!("{delta:.0}° below avg PM"));
+                forecasts[i].comfort_detail = Some(format!("{delta:.0}° below average PM"));
             }
         }
     }
@@ -384,21 +384,21 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     let timing_note = if is_mixed {
         if muddy {
             let label = wet_period_label(days, idx, p, morning_mud);
-            format!("{label} - let it drain")
+            format!("{label}. Let it drain")
         } else if hours_since_end.map_or(false, |h| h < p.mud_clear_hours + 24.0) {
-            "drying, firming up".into()
+            "drying, becoming firm".into()
         } else {
-            "dry hardpack - fast and firm".into()
+            "dry hardpack, fast and firm".into()
         }
     } else {
         match effective_hours {
-            None => "no recent rain - sand may be soft".into(),
-            Some(h) if h < 12.0 => format!("rain ended ~{h:.0}h ago - still settling"),
+            None => "no recent rain, sand can be soft".into(),
+            Some(h) if h < 12.0 => format!("rain ended about {h:.0} hours ago, still settling"),
             Some(h) => {
                 if timing_q >= 0.70 {
-                    format!("rain ended ~{h:.0}h ago - best trail conditions")
+                    format!("rain ended about {h:.0} hours ago, best trail conditions")
                 } else {
-                    format!("rain ended ~{h:.0}h ago - drying out")
+                    format!("significant rain ended {h:.0} hours ago, drying out")
                 }
             }
         }
@@ -408,13 +408,13 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
         "some recent rain".into()
     } else if antecedent > p.max_useful_rain_in {
         if p.model == RideabilityModel::MixedSurface {
-            format!("{antecedent:.2} in recent rain (heavy - may be wet briefly)")
+            format!("{antecedent:.2} in of recent rain, can stay wet briefly")
         } else {
-            format!("{antecedent:.2} in recent rain (heavy - may stay soft or puddled)")
+            format!("{antecedent:.2} in of recent rain, can stay soft or hold water")
         }
     } else {
         format!(
-            "{antecedent:.2} in rain in prior ~{:.0}h",
+            "{antecedent:.2} in of rain in the last {:.0} hours",
             p.pack_lookback_hours
         )
     };
@@ -490,7 +490,7 @@ fn drainage_status(
             return DrainageStatus {
                 quality: 1.0,
                 daylight_fraction: 1.0,
-                note: format!("{:.2} in forecast rain; open AM, PM risk", event.total_in),
+                note: format!("{:.2} in of forecast rain. Open AM, PM risk", event.total_in),
                 blurb: "unsure PM".into(),
                 closure_status: ClosureStatus::Possible,
             };
@@ -513,7 +513,7 @@ fn drainage_status(
             return DrainageStatus {
                 quality: 1.0,
                 daylight_fraction: 1.0,
-                note: format!("{:.2} in forecast rain; open AM, PM risk", event.total_in),
+                note: format!("{:.2} in of forecast rain. Open AM, PM risk", event.total_in),
                 blurb: "unsure PM".into(),
                 closure_status: ClosureStatus::Possible,
             };
@@ -521,7 +521,7 @@ fn drainage_status(
         return DrainageStatus {
             quality: 1.0,
             daylight_fraction: 1.0,
-            note: format!("{:.2} in rain; likely open AM", rain_event.total_in),
+            note: format!("{:.2} in of rain. Likely open AM", rain_event.total_in),
             blurb: "likely open".into(),
             closure_status: ClosureStatus::Clear,
         };
@@ -536,7 +536,7 @@ fn drainage_status(
                 quality: daylight_fraction,
                 daylight_fraction,
                 note: format!(
-                    "{:.2} in rain; open AM, PM risk",
+                    "{:.2} in of rain. Open AM, PM risk",
                     rain_event.total_in
                 ),
                 blurb: "unsure PM".into(),
@@ -546,7 +546,7 @@ fn drainage_status(
         return DrainageStatus {
             quality: 0.05,
             daylight_fraction: 0.0,
-            note: format!("{:.2} in rain; unsure", rain_event.total_in),
+            note: format!("{:.2} in of rain. Unsure", rain_event.total_in),
             blurb: "unsure".into(),
             closure_status: ClosureStatus::Possible,
         };
@@ -560,11 +560,11 @@ fn drainage_status(
         daylight_fraction,
         note: if reopen_hour <= 14.0 {
             format!(
-                "{:.2} in rain; unsure AM, open PM",
+                "{:.2} in of rain. Unsure AM, open PM",
                 rain_event.total_in
             )
         } else {
-            format!("{:.2} in rain; unsure", rain_event.total_in)
+            format!("{:.2} in of rain. Unsure", rain_event.total_in)
         },
         blurb: if reopen_hour <= 14.0 {
             "unsure AM".into()
@@ -802,9 +802,9 @@ fn confidence(date: NaiveDate, today: NaiveDate) -> (f64, Factor) {
     } else if days_out <= 1.0 {
         "near-term forecast".into()
     } else if days_out <= 4.0 {
-        format!("+{days_out:.0} days out - solid confidence")
+        format!("+{days_out:.0} days ahead. High confidence")
     } else {
-        format!("+{days_out:.0} days out - lower confidence")
+        format!("+{days_out:.0} days ahead. Lower confidence")
     };
 
     (
@@ -877,7 +877,7 @@ fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> 
     if p.model == RideabilityModel::MixedSurface {
         if let Some(f) = factors.iter().find(|f| f.name == "Trail conditions") {
             if f.note.starts_with("wet") {
-                return f.note.split(" - ").next().unwrap_or("wet").into();
+                return f.note.split(". ").next().unwrap_or("wet").into();
             }
         }
     }
@@ -1799,7 +1799,7 @@ mod tests {
             "expected comfort note for cool AM"
         );
         // Trailing avg 90.0, day 85.0 → 5° below avg.
-        assert_eq!(d.comfort_detail.as_deref(), Some("5° below avg AM"));
+        assert_eq!(d.comfort_detail.as_deref(), Some("5° below average AM"));
         assert!(
             (d.am_vs_avg_f.unwrap() - (-5.0)).abs() < 1e-9,
             "expected am_vs_avg_f ≈ -5"

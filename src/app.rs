@@ -610,11 +610,11 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                 "Not official trail status."
                             </p>
                             <p>
-                                "Stars estimate rideability from rain, surface model, temp, and wind. "
-                                "Each card is midnight to evening, left to right."
+                                "Stars estimate rideability from rain, surface model, temperature, and wind. "
+                                "Each card shows midnight to evening, left to right."
                             </p>
                             <p class="help-edge-note">
-                                "Card edges show feels-like vs the prior week: "
+                                "Card edges show feels-like temperature compared with the prior week: "
                                 <span class="help-edge-cool">"blue"</span>" is cooler"
                                 ", "
                                 <span class="help-edge-warm">"red"</span>" is warmer"
@@ -720,14 +720,14 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                     </div>
                                     <section class="detail help-demo-detail" style=tint>
                                         <p class="score-line">
-                                            <span>"rain 8 AM-noon · 4° below avg AM"</span>
+                                            <span>"rain 8 AM-noon · 4° below average AM"</span>
                                             <span class="detail-meta">"partly cloudy +8%"</span>
                                         </p>
                                         <ul class="factors">
                                             <li class="factor">
                                                 <span class="name">"Sand pack"</span>
                                                 <span class="contrib pos">"+18%"</span>
-                                                <span class="note">"0.4\" rain ~18h ago — good pack window"</span>
+                                                <span class="note">"0.4 in of rain about 18 hours ago. Good pack window"</span>
                                                 <div class="bar-track">
                                                     <div class="bar-fill" style="width:82%"></div>
                                                 </div>
@@ -873,7 +873,7 @@ fn ReadyView(
                 gauge_rain.get().stale_for(trail.get()).then(|| {
                     view! {
                         <p class="footer-gauge-stale">
-                            "Rain gauges stale — using model rain only."
+                            "The rain gauges are stale. The forecast uses model rain only."
                         </p>
                     }
                 })
@@ -1374,7 +1374,7 @@ fn WeekendWarriorView(
                 if multi_loading.get() {
                     view! {
                         <div class="status">
-                            <p>"Crunching trail comparisons..."</p>
+                            <p>"Loading trail comparisons..."</p>
                             <div class="skeleton skeleton-card"></div>
                             <div class="skeleton skeleton-card"></div>
                         </div>

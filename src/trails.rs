@@ -25,8 +25,8 @@ impl Trail {
     pub fn name(self) -> &'static str {
         match self {
             Self::CampMurphy => "Camp Murphy MTB Trails",
-            Self::Markham => "Markham Park Mountain Bike Trails",
-            Self::QuietWaters => "Quiet Waters Park Mountain Bike Trails",
+            Self::Markham => "Markham Park MTB Trails",
+            Self::QuietWaters => "Quiet Waters Park MTB Trails",
         }
     }
 
