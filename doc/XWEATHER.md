@@ -9,7 +9,7 @@ to the client.
 ## Auth
 
 1. Register at [Xweather](https://www.xweather.com/) → client ID + client secret.
-2. Environment only — **never commit**:
+2. Environment only — never commit:
 
    ```bash
    export XWEATHER_API_KEY='CLIENTID_CLIENTSECRET'

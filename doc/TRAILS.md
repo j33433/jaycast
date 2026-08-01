@@ -18,7 +18,7 @@ powder. The model scores this with **SandPack**:
 
 - More rain generally improves the pack; very heavy recent totals can still leave
   the surface soft or puddled.
-- The timing peak is at **18 hours** after rain ends with a linear fade to soft
+- The timing peak is at 18 hours after rain ends with a linear fade to soft
   over roughly 3 days. The overall pack quality multiplies rain amount by timing,
   so old rain contributes less even when totals look good.
 - Sun dries this lightly canopied sand aggressively, so the ET0 (sunshine) forecast
@@ -63,7 +63,7 @@ again based on how much rain fell and when it stopped.
 | `Possible` | Unsure for at least one window (blurbs: "unsure", "unsure AM", "unsure PM") |
 | `NotApplicable` | No drainage constraint (non-Markham trails) |
 
-The score uses a **daylight fraction** gate instead of a wet-gate multiplier.
+The score uses a daylight fraction gate instead of a wet-gate multiplier.
 If the trail is likely open for 4 of 8 morning daylight hours, the pack
 contribution is halved.
 
@@ -87,13 +87,13 @@ hard base means puddles and slick roots are the worst of it.
 Quiet Waters uses a **MixedSurface** model that puts less weight on surface
 conditions and more on weather.
 
-- The **dry baseline is high** (0.90). Even with no recent rain the surface
+- The dry baseline is high (0.90). Even with no recent rain the surface
   quality starts near the top.
-- Rain only **temporarily degrades** the surface. The mud penalty clears after
+- Rain only temporarily degrades the surface. The mud penalty clears after
   10 hours: rain ending by ~10 PM is rideable by the next 8 AM window.
-- The timing peak is at **30 hours** after rain — a wider, gentler window than
+- The timing peak is at 30 hours after rain — a wider, gentler window than
   Camp Murphy's 18h peak. Pack fade takes roughly 5 days.
-- Ride-window rain thresholds are **more generous** (0.12 in soft, 0.70 in hard
+- Ride-window rain thresholds are more generous (0.12 in soft, 0.70 in hard
   vs. Camp Murphy's 0.05/0.40). A light drizzle doesn't tank the score.
 
 **Score weights:** 35% pack, 55% weather, 10% confidence. Weather (temp, wind,
