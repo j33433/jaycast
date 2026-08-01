@@ -67,7 +67,7 @@ jaycast/
 | `about/index.html` | Static, JS-free landing page served at `/jaycast/about/`. Trail guides for the three parks, how scoring works, FAQ. JSON-LD: `AboutPage`, `FAQPage`, `WebSite`, three `SportsActivityLocation`/`Place` with geo. Copied to `dist/about/` via Trunk `copy-dir`. Deep links into the app with `?camp-murphy`/`?markham`/`?quiet-waters`. |
 | `README.md` | Project description, trail profiles, weekend comparison grid, develop/test/build instructions, CLI usage, score model summary. |
 | `doc/CLI.md` | CLI reference with examples for `analyze`, `backtest`, `xweather publish/dump/rescan`. |
-| `doc/CODEMAP.md` | This file — file-level map of the project. |
+| `doc/CODEMAP.md` | This file. It is the file-level map of the project. |
 | `doc/TRAILS.md` | Per-trail surface character, rain response, score weights, gauge stations. |
 | `doc/XWEATHER.md` | Xweather auth, station map, QC rules, feed CLI reference. |
 
@@ -96,8 +96,8 @@ Crate root. Module doc: "weather-informed MTB trail rideability forecasts."
 - Private modules: `app`, `theme`, `rain_feed`
 - Public modules: `score`, `trails`, `weather`
 - Native-only (`#[cfg(not(target_arch = "wasm32"))]`): `xweather`
-- Re-exports: `apply_gauge_to_days`, `GaugeRain`; native also `load_gauge_from_file`
-- `#[wasm_bindgen(start)] pub fn main()` - entry point; sets panic hook, mounts `App` to body
+- Re-exports: `apply_gauge_to_days`, `GaugeRain`. Native also re-exports `load_gauge_from_file`
+- `#[wasm_bindgen(start)] pub fn main()` - entry point. Sets panic hook, mounts `App` to body
 
 ### `src/app.rs`
 
@@ -105,20 +105,20 @@ Leptos UI component tree. All components and helpers are private.
 
 **Types:**
 - `enum LoadState { Loading, Ready(Vec<DayForecast>), Error(String) }`
-- `struct WeekendGridData { dates, map, best_per_day }` - pure data prep for the multi-trail comparison grid; `build(all, today)` indexes scored days by trail/date and picks Best per day
+- `struct WeekendGridData { dates, map, best_per_day }` - pure data prep for the multi-trail comparison grid. `build(all, today)` indexes scored days by trail/date and picks Best per day
 
 **Components:**
-- `App()` - root; manages state signals (load state, selected day, view start, refreshed_at, model, trail, location/help dialogs, grid coords, theme, gauge_rain, first load, weekend_warrior, multi_days, multi_loading), runs single-trail fetch+score effect + 15-min auto-refresh loop (timeline only; grid is refreshed on toggle/model switch), `load_weekend` fetches history+forecast+gauge for all three trails; trail switch exits weekend view; model switch refreshes grid when open
+- `App()` - root. Manages state signals (load state, selected day, view start, refreshed_at, model, trail, location/help dialogs, grid coords, theme, gauge_rain, first load, weekend_warrior, multi_days, multi_loading). Runs single-trail fetch+score effect + 15-min auto-refresh loop (timeline only. Grid is refreshed on toggle/model switch). `load_weekend` fetches history+forecast+gauge for all three trails. Trail switch exits weekend view. Model switch refreshes grid when open
 - `LocationDialog(open, selected, on_change)` - modal trail chooser
 - `HelpDialog(open)` - modal guide: short site explainer + static annotated day card (clouds, model rain, gauge rain, now marker, score, detail) with thought-bubble callouts
 - `LoadingView()` - skeleton loading state
 - `ErrorView(message, on_retry)` - error display with retry
-- `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, gauge_rain, weekend_warrior, multi_days, multi_loading, on_switch, on_select_trail, on_toggle_weekend)` - composes Hero + either Timeline or WeekendWarriorView + footer; `on_select_day` jumps from grid cell to trail timeline with that day selected
+- `ReadyView(days, selected, view_start, refreshed_at, model, trail, grid_lat, grid_lon, theme, gauge_rain, weekend_warrior, multi_days, multi_loading, on_switch, on_select_trail, on_toggle_weekend)` - composes Hero + either Timeline or WeekendWarriorView + footer. `on_select_day` jumps from grid cell to trail timeline with that day selected
 - `Hero(days, refreshed_at, model, theme, weekend_warrior, on_switch, on_toggle_weekend)` - best ride window, GFS/ECMWF toggle, theme toggle (inline sun/moon SVG), weekend-warrior toggle (2×2 grid icon)
 - `TimelineNav(days, view_start, selected)` - Older/Today/Newer scroll nav
 - `Timeline(days, view_start, selected, trail, gauge_rain)` - day cards with rain/cloud wave SVG backgrounds, AM/PM temp border colors, blue gauge curve overlay, Markham Facebook status link
 - `WeekendWarriorView(multi_days, multi_loading, trail, on_select_day)` - loading/empty/ready dispatch for multi-trail comparison
-- `WeekendGrid(grid, today, trail, on_select_day)` - vertical day cards (today + next 5); each card lists all three trails as touch-friendly rows with stars, blurb, and Best badge
+- `WeekendGrid(grid, today, trail, on_select_day)` - vertical day cards (today + next 5). Each card lists all three trails as touch-friendly rows with stars, blurb, and Best badge
 
 **Helper functions:**
 - `load_selected_pref(trail) / save_selected_pref(trail, date)` - per-trail expanded day card in localStorage
@@ -136,7 +136,7 @@ Leptos UI component tree. All components and helpers are private.
 - `is_weekend(d) -> bool`
 - `haversine_km(lat1, lon1, lat2, lon2) -> f64`
 - `source_distance_line(trail, grid_lat, grid_lon, gauge)` - footer: forecast distance + gauge distances + observation timestamps
-- `format_weather_as_of(init_time, fallback_fetched_at) -> String` - shows model init time in local time (e.g. "forecast as of 6:00 AM") with fallback to fetch time
+- `format_weather_as_of(init_time, fallback_fetched_at) -> String` - shows model init time in local time (for example, "forecast as of 6:00 AM") with fallback to fetch time
 
 ### `src/theme.rs`
 
@@ -192,7 +192,7 @@ Trail definitions and localStorage/URL persistence.
 
 ### `src/score/mod.rs`
 
-Module hub. Re-exports `score_color`, `score_days`, `ClosureStatus`, `DayForecast` from `heuristic`; `Params`, `RideabilityModel` from `params`.
+Module hub. Re-exports `score_color`, `score_days`, `ClosureStatus`, `DayForecast` from `heuristic`. It re-exports `Params`, `RideabilityModel` from `params`.
 
 ### `src/score/params.rs`
 
@@ -207,7 +207,7 @@ Tunable thresholds for the trail rideability heuristics.
 **`impl Params`:**
 - `pub fn for_trail(trail: Trail) -> Self` - tuned params per trail:
   - Camp Murphy: SandPack, default
-  - Markham: Drainage model, `significant_rain_in` 0.10; drainage is 8.5 base hours + 8 hours/in, capped at 18.5 hours
+  - Markham: Drainage model, `significant_rain_in` 0.10. Drainage is 8.5 base hours + 8 hours/in, capped at 18.5 hours
   - Quiet Waters: MixedSurface, higher dry baseline, weather-weighted 0.55
 
 ### `src/score/heuristic.rs`
@@ -233,13 +233,13 @@ Heuristic rideability score for sandy trails that pack after rain.
 
 **Functions (public):**
 - `pub fn score_days(days: &[DayWeather], today: NaiveDate, params: &Params) -> Vec<DayForecast>` - scores every day, marks best among non-past, annotates comfort outliers
-- `pub fn score_days_as_of(..., as_of_hour: Option<u32>)` - same, but Markham drainage on calendar today only scores rain before `as_of_hour`; meaningful future PM rain adds a warning without lowering current drainage
+- `pub fn score_days_as_of(..., as_of_hour: Option<u32>)` - same, but Markham drainage on calendar today only scores rain before `as_of_hour`. Meaningful future PM rain adds a warning without lowering current drainage
 - `pub fn score_to_stars(score: f64) -> f64` - maps 0..=1 to 1.0..=5.0 (one decimal)
 - `pub fn score_color(score: f64) -> String` - HSL color: rust red to sand to scrub green
 
 **Functions (private):**
 - `score_one(days, idx, today, p) -> DayForecast` - combines pack/weather/confidence with wet gate
-- `annotate_comfort_outliers(forecasts)` - marks days whose AM/PM apparent temp is unusually cool vs trailing 7-day average; sets `comfort_note`, `comfort_detail`, `am_vs_avg_f`, `pm_vs_avg_f`. UI only, does not affect scores.
+- `annotate_comfort_outliers(forecasts)` - marks days whose AM/PM apparent temp is unusually cool vs trailing 7-day average. Sets `comfort_note`, `comfort_detail`, `am_vs_avg_f`, `pm_vs_avg_f`. UI only. Does not affect scores.
 - `pack_quality(days, idx, p) -> (f64, Vec<Factor>)` - antecedent rain amount + timing + ride-window wetness (SandPack/MixedSurface)
 - `drainage_status(days, idx, p) -> DrainageStatus` - Markham hourly-rain closure model with amount-dependent drainage duration
 - `latest_meaningful_rain_event(days, idx, p) -> Option<RainEvent>` - walks backward through hourly data, groups rain with 3h gap tolerance, ignores traces below `TRACE_RAIN_IN`
@@ -321,13 +321,13 @@ Open-Meteo API response types and day-window extraction.
 
 ### `src/rain_feed.rs`
 
-Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max tip per hour across stations per trail/day. Unusable when every station's today day is `stale` (footer warning; no overlay or scoring blend). When usable, past completed hours replace model precip before scoring; today uses only non-stale stations. Day cards draw blue gauge curve over the model rain wave when usable.
+Fetches static `/jaycast/rain.json` (Xweather hourly gauge tips). Indexes max tip per hour across stations per trail/day. Unusable when every station's today day is `stale` (footer warning. No overlay or scoring blend). When usable, past completed hours replace model precip before scoring. Today uses only non-stale stations. Day cards draw blue gauge curve over the model rain wave when usable.
 
 Exposes `last_seen_ts(trail) -> Option<i64>` for displaying observation timestamps in the footer.
 
 ### `src/xweather/mod.rs`
 
-Native-only Xweather hourly rain feed builder. Auth via `XWEATHER_API_KEY`. Fetches `/observations/archive/{id}` for Markham, Camp Murphy, and Quiet Waters stations, buckets `precipSinceLastObIN` into 24 hourly tip totals (inches), writes schema-versioned JSON. Past-day cache; `rescan` ranks nearby gauges and rejects bad rain meters.
+Native-only Xweather hourly rain feed builder. Auth via `XWEATHER_API_KEY`. Fetches `/observations/archive/{id}` for Markham, Camp Murphy, and Quiet Waters stations. Buckets `precipSinceLastObIN` into 24 hourly tip totals (inches). Writes schema-versioned JSON. Past-day cache. `rescan` ranks nearby gauges and rejects bad rain meters.
 
 **Types:** `Feed`, `TrailFeed`, `StationFeed`, `DayFeed` - JSON serialization types for the rain feed.
 
@@ -352,7 +352,7 @@ Native CLI binary (requires `cli` feature). Uses `ureq` for HTTP.
 **Functions (private):**
 - `fn main()` - dispatches to `run()`, prints help on error, exits 2
 - `fn run() -> Result<(), String>` - subcommands: `analyze`, `backtest`, `xweather`, `--help`/`-h`/`help`
-- `fn analyze(args) -> Result<(), String>` - scores a date or inclusive range against gfs/ecmwf/both; fetches historical archive + forecast, merges, prints per-day analysis
+- `fn analyze(args) -> Result<(), String>` - scores a date or inclusive range against gfs/ecmwf/both. Fetches historical archive + forecast. Merges and prints per-day analysis
 - `fn fetch_forecast(url, source) -> Result<ForecastResponse, String>` - ureq GET + JSON deserialize
 - `fn print_range_analysis(source, lat, lon, start, end, days, today, trail) -> Result<(), String>`
 - `fn print_analysis(date, source, lat, lon, weather, score)` - formatted stdout: stars, rain totals, 3h breakdown, factor notes

@@ -8,7 +8,7 @@ Weather-aware trail scores for South Florida mountain bike parks.
 - **About / trail guides:** [https://upload.bike/jaycast/about/](https://upload.bike/jaycast/about/)
 - **Screenshot**: [doc/jaycast.png](doc/jaycast.png)
 
-Pick a park, check the stars, decide. No account or app install; open it in the browser.
+Pick a park, check the stars, decide. No account or app install. Open it in the browser.
 
 ---
 
@@ -16,9 +16,9 @@ Pick a park, check the stars, decide. No account or app install; open it in the 
 
 | Park | Surface | After rain |
 |------|---------|------------|
-| **Camp Murphy** (Jonathan Dickinson) | Sandy scrub | Firms up; often *better* once packed |
+| **Camp Murphy** (Jonathan Dickinson) | Sandy scrub | Firms up after rain. Often better once packed |
 | **Markham Park** (Weston) | Dirt / gravel | Can stay closed or sketchy until it drains |
-| **Quiet Waters** (Deerfield Beach) | Mixed hardpack | Rarely a problem; usually rideable again soon |
+| **Quiet Waters** (Deerfield Beach) | Mixed hardpack | Rarely a problem. Usually rideable again soon |
 
 Park choice is remembered. Share a direct link with `?camp-murphy`, `?markham`, or `?quiet-waters`.
 
@@ -31,11 +31,11 @@ Park choice is remembered. Share a direct link with `?camp-murphy`, `?markham`, 
 - **Rain and clouds** on each day card (midnight to evening)
 - **Cooler / warmer** cues on the card edges vs the prior week
 - **Why**: tap a day for a factor breakdown (surface, rain window, temp, wind)
-- **Weekend compare**: the grid icon stacks all three parks for the next several days and tags the **Best** pick; tap a row to jump to that day
+- **Weekend compare**: the grid icon stacks all three parks for the next several days and tags the **Best** pick. Tap a row to jump to that day
 
 Units are inches and °F. Light or dark theme is saved.
 
-Forecasts come from [Open-Meteo](https://open-meteo.com/) (GFS or ECMWF; switchable). Optional nearby rain gauges improve recent rainfall when available. Not official trail status. Use judgment and local reports (e.g. Markham's Facebook group when linked).
+Forecasts come from [Open-Meteo](https://open-meteo.com/). You can switch between GFS and ECMWF. Optional nearby rain gauges improve recent rainfall when available. This is not official trail status. Use judgment and local reports (for example, Markham's Facebook group when linked).
 
 ---
 
@@ -44,8 +44,8 @@ Forecasts come from [Open-Meteo](https://open-meteo.com/) (GFS or ECMWF; switcha
 Each trail is scored differently:
 
 - **Camp Murphy**: sand pack after recent rain (penalizes a wet morning ride).
-- **Markham**: estimates when dirt might reopen after meaningful rain (advisory only).
-- **Quiet Waters**: weights comfort weather more; surface usually stays rideable.
+- **Markham**: estimates when dirt reopens after meaningful rain (advisory only).
+- **Quiet Waters**: weights comfort weather more. Surface usually stays rideable.
 
 See `src/score/` and [doc/TRAILS.md](doc/TRAILS.md). Code layout: [doc/CODEMAP.md](doc/CODEMAP.md).
 

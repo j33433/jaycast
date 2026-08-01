@@ -9,14 +9,14 @@ weather response.
 
 **Surface:** Sandy scrub trails under light canopy. The soil is coarse sand that
 turns loose and soft when bone-dry and firms up beautifully after rain. No mud
-to speak of — this is Florida sugar sand over limestone.
+to speak of. This is Florida sugar sand over limestone.
 
 **How rain affects it:**
 
 Camp Murphy rides best after meaningful rain but before the sun bakes it back to
 powder. The model scores this with **SandPack**:
 
-- More rain generally improves the pack; very heavy recent totals can still leave
+- More rain generally improves the pack. Very heavy recent totals can still leave
   the surface soft or puddled.
 - The timing peak is at 18 hours after rain ends with a linear fade to soft
   over roughly 3 days. The overall pack quality multiplies rain amount by timing,
@@ -37,8 +37,8 @@ powder. The model scores this with **SandPack**:
 **Location:** Weston, FL (26.13, -80.35)
 
 **Surface:** Dirt and gravel trails that drain slowly. When rain hits, the
-trails close — not because of rangers, but because riding wet dirt chews up the
-trail surface and gums up your drivetrain. The county may also post official
+trails close. The reason is not rangers. Riding wet dirt chews up the
+trail surface and gums up your drivetrain. The county can also post official
 closures.
 
 **How rain affects it:**
@@ -50,7 +50,7 @@ again based on how much rain fell and when it stopped.
   ignored.
 - **Base drain time:** 8.5 hours after rain ends, plus 8 hours per additional
   inch of rain, capped at 18.5 hours total.
-- Rain overnight (e.g. ending at 2 AM) will clear by midday. Heavy afternoon
+- Rain overnight (for example, ending at 2 AM) will clear by midday. Heavy afternoon
   rain (1+ inch ending at 6 PM) pushes the reopening to the following midday.
 - The model groups rain events across a 3-hour gap tolerance. Scattered showers
   within the same window count as one event.
@@ -79,7 +79,7 @@ The app links to the Markham Park MTB Facebook group for ground-truth status.
 
 **Surface:** Mixed hardpack and loose-over-hard. Unlike Camp Murphy's sand or
 Markham's dirt, this is firm terrain that stays fast even when dry. It never
-closes and degrades slowly after rain — a thin layer of loose material over a
+closes. It degrades slowly after rain. A thin layer of loose material over a
 hard base means puddles and slick roots are the worst of it.
 
 **How rain affects it:**
@@ -91,10 +91,10 @@ conditions and more on weather.
   quality starts near the top.
 - Rain only temporarily degrades the surface. The mud penalty clears after
   10 hours: rain ending by ~10 PM is rideable by the next 8 AM window.
-- The timing peak is at 30 hours after rain — a wider, gentler window than
+- The timing peak is at 30 hours after rain. This is a wider, gentler window than
   Camp Murphy's 18h peak. Pack fade takes roughly 5 days.
 - Ride-window rain thresholds are more generous (0.12 in soft, 0.70 in hard
-  vs. Camp Murphy's 0.05/0.40). A light drizzle doesn't tank the score.
+  vs. Camp Murphy's 0.05/0.40). A light drizzle does not tank the score.
 
 **Score weights:** 35% pack, 55% weather, 10% confidence. Weather (temp, wind,
 comfort) matters more than surface here since surface quality is consistently

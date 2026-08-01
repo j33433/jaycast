@@ -3,13 +3,13 @@
 Ground-truth rain from PWS, MADIS/CWOP mesonet, and ASOS via the
 [Xweather Weather API](https://www.xweather.com/docs/weather-api). The feed
 replaces model precip for completed hours on the day cards and in scoring. The
-browser app fetches the static feed at `/jaycast/rain.json` — no API key ships
+browser app fetches the static feed at `/jaycast/rain.json`. No API key ships
 to the client.
 
 ## Auth
 
 1. Register at [Xweather](https://www.xweather.com/) → client ID + client secret.
-2. Environment only — never commit:
+2. Store it in the environment. Never commit it:
 
    ```bash
    export XWEATHER_API_KEY='CLIENTID_CLIENTSECRET'
@@ -36,16 +36,16 @@ XWEATHER_API_KEY='...' cargo run --features cli --bin jaycast -- \
 
 | Trail | Primary | Secondary / notes |
 |-------|---------|-------------------|
-| **Markham Park** | **MID_E8181** | **PWS_W4RCT** nearby; ignore **MID_D4511** rain; ASOS **KFXE** ~11 mi |
+| **Markham Park** | **MID_E8181** | **PWS_W4RCT** nearby. Ignore **MID_D4511** rain. ASOS **KFXE** ~11 mi |
 | **Camp Murphy** | **MID_C8019** | **PWS_JOE4SPEED** co-primary (~same distance) |
-| **Quiet Waters** | **PWS_363636363** | ~2.4 mi; MID_C6162 ~3.9 mi alt; MID_SSNVV no precip |
+| **Quiet Waters** | **PWS_363636363** | ~2.4 mi. MID_C6162 ~3.9 mi alt. MID_SSNVV no precip |
 
 ### ID mapping
 
 | CWOP | Xweather ID | Role |
 |------|-------------|------|
 | EW8181 | **MID_E8181** | Primary Markham rain |
-| DW4511 | **MID_D4511** | Rain unreliable — daily totals stuck at 0 |
+| DW4511 | **MID_D4511** | Rain unreliable. Daily totals stuck at 0 |
 | CW8019 | **MID_C8019** | Primary Camp Murphy rain |
 | W4RCT | **PWS_W4RCT** | Near-trail Markham PWS |
 
@@ -54,7 +54,7 @@ XWEATHER_API_KEY='...' cargo run --features cli --bin jaycast -- \
 | ID | Type | Distance | Notes |
 |----|------|----------|-------|
 | KFXE | METAR | ~11 mi Markham | Better ASOS precip than KHWO |
-| KHWO | METAR | nearer Markham | Often empty `precip` — don't rely on alone |
+| KHWO | METAR | nearer Markham | Often empty `precip`. Do not rely on it alone |
 | MID_1529W | MADIS | ~0.8 mi Markham | Very close but often no precip field |
 | PWS_TEQUES007 | PWS | ~2.2 mi Markham | Alt after QC |
 | PWS_JOE4SPEED | PWS | ~3.2 mi Camp Murphy | Co-primary with MID_C8019 |
@@ -63,14 +63,14 @@ XWEATHER_API_KEY='...' cargo run --features cli --bin jaycast -- \
 
 ## QC rules
 
-- **Markham:** use MID_E8181 and/or PWS_W4RCT. Flag/ignore MID_D4511 rain.
-- **Camp Murphy:** use MID_C8019 and/or PWS_JOE4SPEED.
+- **Markham:** use MID_E8181, PWS_W4RCT, or both. Flag/ignore MID_D4511 rain.
+- **Camp Murphy:** use MID_C8019, PWS_JOE4SPEED, or both.
 - **Quiet Waters:** use PWS_363636363. MID_C6162 is a farther alt.
 - Prefer `ob.trustFactor` ≥ 80 and `QCcode` 10 when present.
 - If `ob.dateTimeISO` is >2–3 hours stale, treat as offline.
-- `precip: null` → incomplete; don't invent missing rain.
+- `precip: null` → incomplete. Do not invent missing rain.
 - Secondary must not be colocated with primary (same site / dual MADIS+PWS IDs).
-- Re-run `xweather rescan` periodically; PWS IDs and trust can change.
+- Re-run `xweather rescan` periodically. PWS IDs and trust can change.
 
 ## Quick reference
 

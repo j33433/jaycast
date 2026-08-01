@@ -13,7 +13,7 @@ Output: `target/debug/jaycast`.
 
 ## Commands
 
-### `analyze` — score one or more days
+### `analyze`: score one or more days
 
 Scores a date or inclusive range against GFS, ECMWF, or both. Fetches historical
 archive for past days and forecast for future ones.
@@ -75,12 +75,12 @@ date range so you can compare.
 
 ---
 
-### `backtest` — roll `today` through a fixture
+### `backtest`: roll `today` through a fixture
 
-Loads a historical Open-Meteo archive response (the fixture), then rolls the
+Loads a historical Open-Meteo archive response (the fixture). It rolls the
 `today` pointer forward across every day in the file. At each step the scorer
-sees only the data that would have been available on that day, so the result
-mimics real-world daily scoring.
+sees only the data that was available on that day. The result mimics real-world
+daily scoring.
 
 ```text
 jaycast backtest <fixture.json> [trail]
@@ -113,7 +113,7 @@ at the bottom counts how many days fell into each closure bucket.
 
 ---
 
-### `xweather` — ground-truth gauge rain feed
+### `xweather`: ground-truth gauge rain feed
 
 Xweather subcommands require the `XWEATHER_API_KEY` environment variable. See
 [XWEATHER.md](XWEATHER.md) for setup and station details.
@@ -144,7 +144,7 @@ XWEATHER_API_KEY='CLIENTID_CLIENTSECRET' \
     --out assets/rain.json --cache data/xweather-cache.json
 ```
 
-Without `--cache` the cache lands beside `--out` (e.g. `assets/.jaycast-xweather-cache.json`). Past completed days are only fetched once then served from cache.
+Without `--cache` the cache lands beside `--out` (for example, `assets/.jaycast-xweather-cache.json`). Past completed days are only fetched once then served from cache.
 
 #### `xweather dump`
 
@@ -157,9 +157,9 @@ XWEATHER_API_KEY='CLIENTID_CLIENTSECRET' \
 
 #### `xweather rescan`
 
-Discovers nearby PWS and mesonet stations for a trail, ranks them by distance
-tier and wet-day agreement, and prints a recommendation table. This is a
-read-only audit — it does not modify the feed station table in
+Discovers nearby PWS and mesonet stations for a trail. It ranks them by
+distance tier and wet-day agreement. It prints a recommendation table. This is
+a read-only audit. It does not modify the feed station table in
 `src/xweather/mod.rs`.
 
 | Flag | Default | Description |
