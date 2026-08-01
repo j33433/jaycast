@@ -1,3 +1,7 @@
+AGENTS.md
+SIMPLEENGLISH.md
+/logs
+/node_modules
 /target
 /dist
 .DS_Store
