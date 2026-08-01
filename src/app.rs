@@ -955,80 +955,82 @@ fn Hero(
                                 "GFS"
                             </button>
                         </div>
-                        <button
-                            type="button"
-                            class="theme-toggle"
-                            aria-label=move || {
-                                if theme.get() == Theme::Dark {
-                                    "Switch to light theme"
-                                } else {
-                                    "Switch to dark theme"
+                        <div class="hero-secondary">
+                            <button
+                                type="button"
+                                class="theme-toggle"
+                                aria-label=move || {
+                                    if theme.get() == Theme::Dark {
+                                        "Switch to light theme"
+                                    } else {
+                                        "Switch to dark theme"
+                                    }
                                 }
-                            }
-                            title=move || {
-                                if theme.get() == Theme::Dark {
-                                    "Light theme"
-                                } else {
-                                    "Dark theme"
+                                title=move || {
+                                    if theme.get() == Theme::Dark {
+                                        "Light theme"
+                                    } else {
+                                        "Dark theme"
+                                    }
                                 }
-                            }
-                            on:click=move |_| {
-                                let next = theme.get_untracked().toggle();
-                                save_theme_pref(next);
-                                theme.set(next);
-                            }
-                        >
-                            {move || {
-                                if theme.get() == Theme::Dark {
-                                    // Sun icon: switch to light
-                                    view! {
-                                        <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
-                                            <circle cx="12" cy="12" r="4" fill="currentColor"/>
-                                            <g stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
-                                                <line x1="12" y1="2.5" x2="12" y2="5"/>
-                                                <line x1="12" y1="19" x2="12" y2="21.5"/>
-                                                <line x1="2.5" y1="12" x2="5" y2="12"/>
-                                                <line x1="19" y1="12" x2="21.5" y2="12"/>
-                                                <line x1="5.05" y1="5.05" x2="6.8" y2="6.8"/>
-                                                <line x1="17.2" y1="17.2" x2="18.95" y2="18.95"/>
-                                                <line x1="5.05" y1="18.95" x2="6.8" y2="17.2"/>
-                                                <line x1="17.2" y1="6.8" x2="18.95" y2="5.05"/>
-                                            </g>
-                                        </svg>
-                                    }.into_any()
-                                } else {
-                                    // Thick crescent moon: switch to dark
-                                    view! {
-                                        <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path
-                                                fill="currentColor"
-                                                d="M21 14.5A9 9 0 0 1 9.5 3 7.2 7.2 0 1 0 21 14.5z"
-                                            />
-                                        </svg>
-                                    }.into_any()
+                                on:click=move |_| {
+                                    let next = theme.get_untracked().toggle();
+                                    save_theme_pref(next);
+                                    theme.set(next);
                                 }
-                            }}
-                        </button>
-                        <button
-                            type="button"
-                            class=move || {
-                                if weekend_warrior.get() {
-                                    "weekend-toggle active"
-                                } else {
-                                    "weekend-toggle"
+                            >
+                                {move || {
+                                    if theme.get() == Theme::Dark {
+                                        // Sun icon: switch to light
+                                        view! {
+                                            <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                                <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                                                <g stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+                                                    <line x1="12" y1="2.5" x2="12" y2="5"/>
+                                                    <line x1="12" y1="19" x2="12" y2="21.5"/>
+                                                    <line x1="2.5" y1="12" x2="5" y2="12"/>
+                                                    <line x1="19" y1="12" x2="21.5" y2="12"/>
+                                                    <line x1="5.05" y1="5.05" x2="6.8" y2="6.8"/>
+                                                    <line x1="17.2" y1="17.2" x2="18.95" y2="18.95"/>
+                                                    <line x1="5.05" y1="18.95" x2="6.8" y2="17.2"/>
+                                                    <line x1="17.2" y1="6.8" x2="18.95" y2="5.05"/>
+                                                </g>
+                                            </svg>
+                                        }.into_any()
+                                    } else {
+                                        // Thick crescent moon: switch to dark
+                                        view! {
+                                            <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path
+                                                    fill="currentColor"
+                                                    d="M21 14.5A9 9 0 0 1 9.5 3 7.2 7.2 0 1 0 21 14.5z"
+                                                />
+                                            </svg>
+                                        }.into_any()
+                                    }
+                                }}
+                            </button>
+                            <button
+                                type="button"
+                                class=move || {
+                                    if weekend_warrior.get() {
+                                        "weekend-toggle active"
+                                    } else {
+                                        "weekend-toggle"
+                                    }
                                 }
-                            }
-                            aria-label="Weekend warrior comparison grid"
-                            title="Compare all trails"
-                            on:click=move |_| on_toggle_weekend.run(())
-                        >
-                            <svg class="weekend-icon" viewBox="0 0 24 24" aria-hidden="true">
-                                <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor"/>
-                                <rect x="14" y="3" width="7" height="7" rx="1" fill="currentColor"/>
-                                <rect x="3" y="14" width="7" height="7" rx="1" fill="currentColor"/>
-                                <rect x="14" y="14" width="7" height="7" rx="1" fill="currentColor"/>
-                            </svg>
-                        </button>
+                                aria-label="Weekend warrior comparison grid"
+                                title="Compare all trails"
+                                on:click=move |_| on_toggle_weekend.run(())
+                            >
+                                <svg class="weekend-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor"/>
+                                    <rect x="14" y="3" width="7" height="7" rx="1" fill="currentColor"/>
+                                    <rect x="3" y="14" width="7" height="7" rx="1" fill="currentColor"/>
+                                    <rect x="14" y="14" width="7" height="7" rx="1" fill="currentColor"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
