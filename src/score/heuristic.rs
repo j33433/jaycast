@@ -21,6 +21,25 @@ pub struct Factor {
     pub quality: f64,
 }
 
+/// Whether a blurb tag helps or hurts the ride score.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TagTone {
+    Good,
+    Bad,
+    Neutral,
+}
+
+/// One short colored keyword in a day's blurb, e.g. "firm", "rain am", "open".
+#[derive(Clone, Debug)]
+pub struct BlurbTag {
+    pub text: &'static str,
+    pub tone: TagTone,
+}
+
+fn tag(text: &'static str, tone: TagTone) -> BlurbTag {
+    BlurbTag { text, tone }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClosureStatus {
     NotApplicable,
@@ -56,6 +75,8 @@ pub struct DayForecast {
     pub precip_prob_ride_max: f64,
     pub closure_status: ClosureStatus,
     pub blurb: String,
+    /// Short colored keywords that make up the blurb, in display order.
+    pub tags: Vec<BlurbTag>,
     /// Short badge label ("AM"/"PM") when this day is an unusually cool outlier.
     pub comfort_note: Option<String>,
     /// Full detail line, e.g. "6° cooler than usual (AM)".
@@ -108,6 +129,17 @@ pub fn score_days_as_of(
 
     annotate_comfort_outliers(&mut forecasts);
 
+    // Comfort tags are added after scoring, so rebuild each blurb so the
+    // plain-text form matches the tag list (e.g. includes "cool"/"hot").
+    for f in forecasts.iter_mut() {
+        f.blurb = f
+            .tags
+            .iter()
+            .map(|t| t.text)
+            .collect::<Vec<_>>()
+            .join(", ");
+    }
+
     forecasts
 }
 
@@ -116,6 +148,7 @@ pub fn score_days_as_of(
 /// Purely a UI annotation — does not modify scores.
 const COMFORT_WINDOW: usize = 7;
 const COMFORT_THRESHOLD: f64 = 4.0;
+const COMFORT_HOT_THRESHOLD: f64 = 6.0;
 
 fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
     for i in 0..forecasts.len() {
@@ -136,6 +169,9 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
                 let delta = (avg_am - apparent_am).round();
                 forecasts[i].comfort_note = Some("AM".into());
                 forecasts[i].comfort_detail = Some(format!("{delta:.0}° below average AM"));
+                push_comfort_tag(&mut forecasts[i], tag("cool", TagTone::Good));
+            } else if apparent_am >= avg_am + COMFORT_HOT_THRESHOLD {
+                push_comfort_tag(&mut forecasts[i], tag("hot", TagTone::Bad));
             }
         }
         if pm_vals.len() >= 3 && apparent_pm > 0.0 {
@@ -147,8 +183,17 @@ fn annotate_comfort_outliers(forecasts: &mut [DayForecast]) {
                 let delta = (avg_pm - apparent_pm).round();
                 forecasts[i].comfort_note = Some("PM".into());
                 forecasts[i].comfort_detail = Some(format!("{delta:.0}° below average PM"));
+                push_comfort_tag(&mut forecasts[i], tag("cool", TagTone::Good));
+            } else if apparent_pm >= avg_pm + COMFORT_HOT_THRESHOLD {
+                push_comfort_tag(&mut forecasts[i], tag("hot", TagTone::Bad));
             }
         }
+    }
+}
+
+fn push_comfort_tag(f: &mut DayForecast, t: BlurbTag) {
+    if !f.tags.iter().any(|existing| existing.text == t.text) {
+        f.tags.push(t);
     }
 }
 
@@ -245,10 +290,11 @@ fn score_one(
     factors.push(cf);
 
     let stars = score_to_stars(score);
-    let blurb = drainage
-        .as_ref()
-        .map(|status| status.blurb.clone())
-        .unwrap_or_else(|| make_blurb(day, pack_q, &factors, p));
+    let tags = match drainage.as_ref() {
+        Some(status) => build_drainage_tags(status, day, p),
+        None => make_tags(day, pack_q, &factors, p),
+    };
+    let blurb = tags.iter().map(|t| t.text).collect::<Vec<_>>().join(", ");
     let closure_status = drainage
         .as_ref()
         .map(|status| status.closure_status.clone())
@@ -272,6 +318,7 @@ fn score_one(
         precip_prob_ride_max: day.precip_prob_ride_max,
         closure_status,
         blurb,
+        tags,
         comfort_note: None,
         comfort_detail: None,
         am_vs_avg_f: None,
@@ -469,7 +516,7 @@ struct DrainageStatus {
     quality: f64,
     daylight_fraction: f64,
     note: String,
-    blurb: String,
+    tag: BlurbTag,
     closure_status: ClosureStatus,
 }
 
@@ -491,7 +538,7 @@ fn drainage_status(
                 quality: 1.0,
                 daylight_fraction: 1.0,
                 note: format!("{:.2} in of forecast rain. Open AM, PM risk", event.total_in),
-                blurb: "unsure PM".into(),
+                tag: tag("unsure pm", TagTone::Bad),
                 closure_status: ClosureStatus::Possible,
             };
         }
@@ -499,7 +546,7 @@ fn drainage_status(
             quality: 1.0,
             daylight_fraction: 1.0,
             note: "no recent heavy rain".into(),
-            blurb: "likely open".into(),
+            tag: tag("open", TagTone::Good),
             closure_status: ClosureStatus::Clear,
         };
     };
@@ -514,7 +561,7 @@ fn drainage_status(
                 quality: 1.0,
                 daylight_fraction: 1.0,
                 note: format!("{:.2} in of forecast rain. Open AM, PM risk", event.total_in),
-                blurb: "unsure PM".into(),
+                tag: tag("unsure pm", TagTone::Bad),
                 closure_status: ClosureStatus::Possible,
             };
         }
@@ -522,7 +569,7 @@ fn drainage_status(
             quality: 1.0,
             daylight_fraction: 1.0,
             note: format!("{:.2} in of rain. Likely open AM", rain_event.total_in),
-            blurb: "likely open".into(),
+            tag: tag("open", TagTone::Good),
             closure_status: ClosureStatus::Clear,
         };
     }
@@ -539,7 +586,7 @@ fn drainage_status(
                     "{:.2} in of rain. Open AM, PM risk",
                     rain_event.total_in
                 ),
-                blurb: "unsure PM".into(),
+                tag: tag("unsure pm", TagTone::Bad),
                 closure_status: ClosureStatus::Possible,
             };
         }
@@ -547,7 +594,7 @@ fn drainage_status(
             quality: 0.05,
             daylight_fraction: 0.0,
             note: format!("{:.2} in of rain. Unsure", rain_event.total_in),
-            blurb: "unsure".into(),
+            tag: tag("unsure", TagTone::Bad),
             closure_status: ClosureStatus::Possible,
         };
     }
@@ -566,10 +613,10 @@ fn drainage_status(
         } else {
             format!("{:.2} in of rain. Unsure", rain_event.total_in)
         },
-        blurb: if reopen_hour <= 14.0 {
-            "unsure AM".into()
+        tag: if reopen_hour <= 14.0 {
+            tag("unsure am", TagTone::Bad)
         } else {
-            "unsure".into()
+            tag("unsure", TagTone::Bad)
         },
         closure_status: ClosureStatus::Possible,
     }
@@ -873,55 +920,106 @@ pub fn score_color(score: f64) -> String {
     format!("hsl({h:.0} {s:.0}% {l:.0}%)")
 }
 
-fn make_blurb(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> String {
+/// Short surface + rain tags for a scored day (non-drainage models). Order is
+/// surface first, then rain. A wet day keeps its surface tag so a packed trail
+/// still reads next to the rain. MixedSurface drops the surface tag only when
+/// the trail itself is wet, where "wet am" says it all.
+fn make_tags(day: &DayWeather, pack_q: f64, factors: &[Factor], p: &Params) -> Vec<BlurbTag> {
     if p.model == RideabilityModel::MixedSurface {
         if let Some(f) = factors.iter().find(|f| f.name == "Trail conditions") {
             if f.note.starts_with("wet") {
-                return f.note.split(". ").next().unwrap_or("wet").into();
+                let label = f.note.split(". ").next().unwrap_or("wet");
+                return vec![wet_label_tag(label)];
             }
         }
     }
-    if day.precip_in >= 0.25 {
-        return wet_period_blurb(day);
+
+    let mut tags = Vec::new();
+    if let Some(s) = surface_tag(p, pack_q, factors) {
+        tags.push(s);
     }
+    let rain = if day.precip_in >= 0.25 {
+        Some(wet_period_tag(day))
+    } else {
+        ride_rain_tag(day)
+    };
+    if let Some(r) = rain {
+        tags.push(r);
+    }
+    tags
+}
+
+fn surface_tag(p: &Params, pack_q: f64, factors: &[Factor]) -> Option<BlurbTag> {
     if pack_q >= 0.7 {
-        return if p.model == RideabilityModel::MixedSurface {
-            "good".into()
+        return Some(if p.model == RideabilityModel::MixedSurface {
+            tag("fast", TagTone::Good)
         } else {
-            "firm sand".into()
-        };
+            tag("firm", TagTone::Good)
+        });
     }
     if pack_q <= 0.35 {
-        return if p.model == RideabilityModel::MixedSurface {
-            "some loose terrain likely".into()
+        return Some(if p.model == RideabilityModel::MixedSurface {
+            tag("loose", TagTone::Bad)
         } else {
-            "likely soft sand".into()
-        };
+            tag("soft", TagTone::Bad)
+        });
     }
+    let trail_note = factors
+        .iter()
+        .find(|f| f.name == "Trail conditions")
+        .map(|f| f.note.as_str())
+        .unwrap_or("");
     if p.model == RideabilityModel::SandPack {
-        if let Some(f) = factors.iter().find(|f| f.name == "Trail conditions") {
-            if f.note.contains("drying out") {
-                return "sand drying out".into();
-            }
-            if f.note.contains("settling") {
-                return "sand settling".into();
-            }
-            return "mixed sand".into();
+        if trail_note.contains("drying out") {
+            return Some(tag("drying", TagTone::Neutral));
         }
+        if trail_note.contains("settling") {
+            return Some(tag("settling", TagTone::Good));
+        }
+        return Some(tag("mixed", TagTone::Neutral));
     }
-    // Fall back to strongest named factor note snippet.
-    factors
-        .first()
-        .map(|f| f.note.clone())
-        .unwrap_or_else(|| format!("high {:.0}°F", day.temp_max_f))
+    // MixedSurface mid pack: firm once dry, otherwise still draining.
+    if trail_note.contains("fast and firm") {
+        return Some(tag("fast", TagTone::Good));
+    }
+    if trail_note.contains("drying") {
+        return Some(tag("drying", TagTone::Neutral));
+    }
+    Some(tag("mixed", TagTone::Neutral))
+}
+
+/// Rain in the ride window that is not already the whole-day wet label.
+fn ride_rain_tag(day: &DayWeather) -> Option<BlurbTag> {
+    if day.precip_ride_in >= 0.10 {
+        return Some(tag("rain am", TagTone::Bad));
+    }
+    None
+}
+
+/// Closure advisory tag for Markham. A clear day shows no tag: "open" is
+/// unverified and changes often, and the day card links to Facebook for ground
+/// truth. Only uncertainty ("unsure am"/"unsure pm"/"unsure") is flagged.
+fn build_drainage_tags(status: &DrainageStatus, _day: &DayWeather, _p: &Params) -> Vec<BlurbTag> {
+    match status.closure_status {
+        ClosureStatus::Possible => vec![status.tag.clone()],
+        _ => Vec::new(),
+    }
 }
 
 /// Prefer a timed wet label when rain is clearly confined to one half of the day.
-fn wet_period_blurb(day: &DayWeather) -> String {
+fn wet_period_tag(day: &DayWeather) -> BlurbTag {
     match am_pm_period(&day.precip_3h_in) {
-        Some("AM") => "rain AM".into(),
-        Some("PM") => "rain PM".into(),
-        _ => "rainy day".into(),
+        Some("AM") => tag("rain am", TagTone::Bad),
+        Some("PM") => tag("rain pm", TagTone::Bad),
+        _ => tag("rainy", TagTone::Bad),
+    }
+}
+
+fn wet_label_tag(label: &str) -> BlurbTag {
+    match label {
+        "wet AM" => tag("wet am", TagTone::Bad),
+        "wet PM" => tag("wet pm", TagTone::Bad),
+        _ => tag("wet", TagTone::Bad),
     }
 }
 
@@ -1361,9 +1459,9 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[1].blurb, "unsure AM");
+        assert_eq!(scored[1].blurb, "unsure am");
         assert_eq!(scored[1].closure_status, ClosureStatus::Possible);
-        assert_eq!(scored[2].blurb, "likely open");
+        assert_eq!(scored[2].blurb, "");
         assert_eq!(scored[2].closure_status, ClosureStatus::Clear);
         assert!(scored[1].score < scored[2].score);
     }
@@ -1384,7 +1482,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[1].blurb, "unsure AM");
+        assert_eq!(scored[1].blurb, "unsure am");
         assert_eq!(scored[1].closure_status, ClosureStatus::Possible);
     }
 
@@ -1404,7 +1502,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "unsure PM");
+        assert_eq!(scored[0].blurb, "unsure pm");
         assert_eq!(scored[0].closure_status, ClosureStatus::Possible);
         // Morning was rideable, so score should reflect partial daylight.
         assert!(
@@ -1413,7 +1511,7 @@ mod tests {
             scored[0].score
         );
         // Day after is clear.
-        assert_eq!(scored[1].blurb, "likely open");
+        assert_eq!(scored[1].blurb, "");
         assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
     }
 
@@ -1431,7 +1529,7 @@ mod tests {
         let p = Params::for_trail(crate::trails::Trail::Markham);
 
         let morning = score_days_as_of(&days, today, &p, Some(10));
-        assert_eq!(morning[1].blurb, "unsure PM");
+        assert_eq!(morning[1].blurb, "unsure pm");
         assert_eq!(morning[1].closure_status, ClosureStatus::Possible);
         let status = morning[1]
             .factors
@@ -1450,7 +1548,7 @@ mod tests {
 
         let evening = score_days_as_of(&days, today, &p, Some(18));
         assert_ne!(
-            evening[1].blurb, "likely open",
+            evening[1].blurb, "",
             "after the storm, drainage should apply"
         );
         assert_eq!(evening[1].closure_status, ClosureStatus::Possible);
@@ -1482,7 +1580,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[0].blurb, "likely open");
+        assert_eq!(scored[0].blurb, "");
         assert_eq!(scored[0].closure_status, ClosureStatus::Clear);
     }
 
@@ -1506,7 +1604,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::Markham),
         );
 
-        assert_eq!(scored[1].blurb, "likely open");
+        assert_eq!(scored[1].blurb, "");
         assert_eq!(scored[1].closure_status, ClosureStatus::Clear);
     }
 
@@ -1601,7 +1699,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_eq!(d.blurb, "wet AM");
+        assert_eq!(d.blurb, "wet am");
         assert!(
             d.stars < 3.5,
             "wet AM should ding the score, got {:.1} stars",
@@ -1623,7 +1721,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_eq!(d.blurb, "wet PM");
+        assert_eq!(d.blurb, "wet pm");
         assert!(
             d.stars < 3.5,
             "wet PM should ding the score, got {:.1} stars",
@@ -1689,7 +1787,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_eq!(d.blurb, "wet AM");
+        assert_eq!(d.blurb, "wet am");
         assert!(
             d.stars < 3.5,
             "late-evening wet AM should ding the score, got {:.1} stars",
@@ -1713,7 +1811,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[1];
-        assert_ne!(d.blurb, "wet AM", "afternoon storm should clear overnight");
+        assert_ne!(d.blurb, "wet am", "afternoon storm should clear overnight");
         assert!(
             !d.blurb.starts_with("wet"),
             "expected recovered trail, got '{}'",
@@ -1743,7 +1841,7 @@ mod tests {
             &Params::for_trail(crate::trails::Trail::QuietWaters),
         );
         let d = &scored[2];
-        assert_eq!(d.blurb, "good");
+        assert_eq!(d.blurb, "fast");
         assert!(
             d.stars >= 3.5,
             "recovered trail should score well, got {:.1} stars",
@@ -1763,20 +1861,96 @@ mod tests {
     fn wet_blurb_names_a_single_wet_half() {
         let mut evening = day("2026-07-02", 1.0, 88.0);
         evening.precip_3h_in = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
-        assert_eq!(wet_period_blurb(&evening), "rain PM");
+        assert_eq!(wet_period_tag(&evening).text, "rain pm");
 
         let mut morning = day("2026-07-02", 0.50, 88.0);
         morning.precip_3h_in = [0.0, 0.0, 0.40, 0.10, 0.0, 0.0, 0.0, 0.0];
-        assert_eq!(wet_period_blurb(&morning), "rain AM");
+        assert_eq!(wet_period_tag(&morning).text, "rain am");
 
         let mut spread = day("2026-07-02", 0.60, 88.0);
         spread.precip_3h_in = [0.0, 0.0, 0.30, 0.0, 0.30, 0.0, 0.0, 0.0];
-        assert_eq!(wet_period_blurb(&spread), "rainy day");
+        assert_eq!(wet_period_tag(&spread).text, "rainy");
 
         // Both halves meaningful: not "rain PM" just because PM is larger.
         let mut both = day("2026-07-29", 0.47, 88.0);
         both.precip_3h_in = [0.0, 0.0, 0.19, 0.01, 0.01, 0.13, 0.13, 0.0];
-        assert_eq!(wet_period_blurb(&both), "rainy day");
+        assert_eq!(wet_period_tag(&both).text, "rainy");
+    }
+
+    #[test]
+    fn tags_carry_expected_tone() {
+        // Firm packed sand day: good surface tag.
+        let days = vec![
+            day("2026-07-01", 1.0, 82.0),
+            day("2026-07-02", 0.0, 84.0),
+        ];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(&days, today, &Params::default());
+        let d = scored.iter().find(|d| d.date == today).unwrap();
+        assert!(
+            d.tags.iter().any(|t| t.text == "firm" && t.tone == TagTone::Good),
+            "firm sand should be a good tag, got {:?}",
+            d.tags
+        );
+
+        // Wet AM Quiet Waters: bad rain tag.
+        let mut rain = day("2026-07-02", 0.50, 88.0);
+        rain.precip_3h_in = [0.0, 0.20, 0.20, 0.10, 0.0, 0.0, 0.0, 0.0];
+        rain.precip_ride_in = 0.30;
+        rain.precip_pm_in = 0.0;
+        let qw = score_days(
+            &[day("2026-07-01", 0.0, 88.0), rain],
+            today,
+            &Params::for_trail(crate::trails::Trail::QuietWaters),
+        );
+        let wet = &qw[1];
+        assert!(
+            wet.tags.iter().any(|t| t.text == "wet am" && t.tone == TagTone::Bad),
+            "wet am should be a bad tag, got {:?}",
+            wet.tags
+        );
+
+        // Markham dry clear day: no advisory tag (status is unverified, so the
+        // UI links to Facebook instead of claiming "open").
+        let mk = score_days(
+            &[day("2026-07-01", 0.0, 80.0), day("2026-07-02", 0.0, 80.0)],
+            today,
+            &Params::for_trail(crate::trails::Trail::Markham),
+        );
+        assert!(
+            mk[1].tags.is_empty(),
+            "a clear Markham day should show no advisory tag, got {:?}",
+            mk[1].tags
+        );
+    }
+
+    #[test]
+    fn wet_sand_day_keeps_surface_and_rain_tags() {
+        // Heavy rain on the ride day: the packed-surface tag should still show
+        // alongside the rain tag instead of being dropped.
+        let days = vec![
+            day("2026-07-01", 1.0, 82.0),
+            {
+                let mut d = day("2026-07-02", 0.9, 84.0);
+                d.precip_ride_in = 0.30;
+                d.precip_pm_in = 0.60;
+                d.precip_3h_in = [0.0, 0.0, 0.30, 0.0, 0.60, 0.0, 0.0, 0.0];
+                d
+            },
+        ];
+        let today = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let scored = score_days(&days, today, &Params::default());
+        let d = scored.iter().find(|d| d.date == today).unwrap();
+        assert!(
+            d.tags.iter().any(|t| t.tone == TagTone::Bad),
+            "expected a bad rain tag, got {:?}",
+            d.tags
+        );
+        assert!(
+            d.tags.iter().any(|t| t.text == "firm" && t.tone == TagTone::Good),
+            "packed surface should keep a firm tag on a wet day, got {:?}",
+            d.tags
+        );
     }
 
     #[test]
@@ -1800,6 +1974,16 @@ mod tests {
         );
         // Trailing avg 90.0, day 85.0 → 5° below avg.
         assert_eq!(d.comfort_detail.as_deref(), Some("5° below average AM"));
+        assert!(
+            d.tags.iter().any(|t| t.text == "cool" && t.tone == TagTone::Good),
+            "cool outlier should add a good 'cool' tag, got {:?}",
+            d.tags
+        );
+        assert!(
+            d.blurb.contains("cool"),
+            "plain-text blurb should include the cool tag, got '{}'",
+            d.blurb
+        );
         assert!(
             (d.am_vs_avg_f.unwrap() - (-5.0)).abs() < 1e-9,
             "expected am_vs_avg_f ≈ -5"

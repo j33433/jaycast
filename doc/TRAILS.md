@@ -59,8 +59,8 @@ again based on how much rain fell and when it stopped.
 
 | Status (internal) | Meaning |
 |---|---|
-| `Clear` | Likely open all day (blurb: "likely open") |
-| `Possible` | Unsure for at least one window (blurbs: "unsure", "unsure AM", "unsure PM") |
+| `Clear` | Likely open all day (no advisory blurb shown) |
+| `Possible` | Unsure for at least one window (blurbs: "unsure", "unsure am", "unsure pm") |
 | `NotApplicable` | No drainage constraint (non-Markham trails) |
 
 The score uses a daylight fraction gate instead of a wet-gate multiplier.

@@ -684,7 +684,7 @@ fn HelpDialog(open: RwSignal<bool>) -> impl IntoView {
                                         </div>
                                         <div class="mid">
                                             <div class="stars-sm">"4.2 ★"</div>
-                                            <div class="blurb">"sandy, light PM rain"</div>
+                                            <div class="blurb">"firm, rain pm"</div>
                                         </div>
                                         <div class="precip">
                                             "0.41\""
@@ -1041,7 +1041,7 @@ fn Hero(
                     let tint = score_style(d.score);
                     view! {
                         <div class="stars" style=tint>{stars}</div>
-                        <p class="why">{blurb}</p>
+                        {(!blurb.is_empty()).then(|| view! { <p class="why">{blurb}</p> })}
                     }
                     .into_any()
                 }
@@ -1192,6 +1192,7 @@ fn Timeline(
                         let today = Local::now().date_naive();
                         let facebook_status_link = date == today
                             || (possible_closure && date == today + Duration::days(1));
+                        let has_blurb = !d.blurb.is_empty();
                         let card_label = format!("Show details for {date_s}");
                         let dow = if is_today {
                             "Today".to_string()
@@ -1311,7 +1312,8 @@ fn Timeline(
                                                 (trail.get() == Trail::Markham && facebook_status_link).then(|| {
                                                     view! {
                                                         <span class="facebook-status-copy">
-                                                            " · see "
+                                                            {has_blurb.then(|| " · ")}
+                                                            "see "
                                                             <a
                                                                 class="facebook-status-link"
                                                                 href="https://www.facebook.com/groups/MarkhamParkMTB"

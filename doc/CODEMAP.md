@@ -192,7 +192,7 @@ Trail definitions and localStorage/URL persistence.
 
 ### `src/score/mod.rs`
 
-Module hub. Re-exports `score_color`, `score_days`, `ClosureStatus`, `DayForecast` from `heuristic`. It re-exports `Params`, `RideabilityModel` from `params`.
+Module hub. Re-exports `score_color`, `score_days`, `ClosureStatus`, `DayForecast`, `BlurbTag`, `TagTone` from `heuristic`. It re-exports `Params`, `RideabilityModel` from `params`.
 
 ### `src/score/params.rs`
 
@@ -223,12 +223,14 @@ Heuristic rideability score for sandy trails that pack after rain.
 
 **Types:**
 - `struct Factor { name: &'static str, note: String, contribution: f64, quality: f64 }`
+- `enum TagTone { Good, Bad, Neutral }` - tone of a blurb tag (green/red/neutral in the UI)
+- `struct BlurbTag { text: &'static str, tone: TagTone }` - one short colored keyword in a day's blurb
 - `enum ClosureStatus { NotApplicable, Clear, Possible }`
   - `pub fn is_possible(&self) -> bool`
-- `struct DayForecast` - public fields: `date`, `stars`, `score`, `factors: Vec<Factor>`, `best`, `is_past`, `is_today`, `precip_in`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`, `temp_max_f`, `temp_min_f`, `apparent_am_f`, `apparent_pm_f`, `precip_prob_max`, `precip_prob_ride_max`, `closure_status`, `blurb`, `comfort_note` ("AM"/"PM" badge for cool outliers), `comfort_detail` ("6° below avg AM"), `am_vs_avg_f` (delta from 7-day AM avg), `pm_vs_avg_f`
+- `struct DayForecast` - public fields: `date`, `stars`, `score`, `factors: Vec<Factor>`, `best`, `is_past`, `is_today`, `precip_in`, `precip_3h_in: [f64;8]`, `cloud_3h_pct: [f64;8]`, `temp_max_f`, `temp_min_f`, `apparent_am_f`, `apparent_pm_f`, `precip_prob_max`, `precip_prob_ride_max`, `closure_status`, `blurb` (tag texts joined with ", "), `tags: Vec<BlurbTag>`, `comfort_note` ("AM"/"PM" badge for cool outliers), `comfort_detail` ("6° below avg AM"), `am_vs_avg_f` (delta from 7-day AM avg), `pm_vs_avg_f`
 
 **Private structs:**
-- `DrainageStatus { quality, daylight_fraction, note, blurb, closure_status }`
+- `DrainageStatus { quality, daylight_fraction, note, tag, closure_status }`
 - `RainEvent { total_in, end_hour, start_hour }`
 
 **Functions (public):**
@@ -238,8 +240,8 @@ Heuristic rideability score for sandy trails that pack after rain.
 - `pub fn score_color(score: f64) -> String` - HSL color: rust red to sand to scrub green
 
 **Functions (private):**
-- `score_one(days, idx, today, p) -> DayForecast` - combines pack/weather/confidence with wet gate
-- `annotate_comfort_outliers(forecasts)` - marks days whose AM/PM apparent temp is unusually cool vs trailing 7-day average. Sets `comfort_note`, `comfort_detail`, `am_vs_avg_f`, `pm_vs_avg_f`. UI only. Does not affect scores.
+- `score_one(days, idx, today, p) -> DayForecast` - combines pack/weather/confidence with wet gate, builds `tags`, joins them into `blurb`
+- `annotate_comfort_outliers(forecasts)` - marks days whose AM/PM apparent temp is unusually cool vs trailing 7-day average. Sets `comfort_note`, `comfort_detail`, `am_vs_avg_f`, `pm_vs_avg_f`, and `cool`/`hot` tags. UI only. Does not affect scores.
 - `pack_quality(days, idx, p) -> (f64, Vec<Factor>)` - antecedent rain amount + timing + ride-window wetness (SandPack/MixedSurface)
 - `drainage_status(days, idx, p) -> DrainageStatus` - Markham hourly-rain closure model with amount-dependent drainage duration
 - `latest_meaningful_rain_event(days, idx, p) -> Option<RainEvent>` - walks backward through hourly data, groups rain with 3h gap tolerance, ignores traces below `TRACE_RAIN_IN`
@@ -247,12 +249,16 @@ Heuristic rideability score for sandy trails that pack after rain.
 - `confidence(date, today) -> (f64, Factor)` - full confidence today through day 3, tapers to 0.45 by day 7
 - `drying_factor(days, idx, hours_since, p) -> f64` - ET0-based drying clock multiplier
 - `hours_since_significant_rain(days, idx, threshold) -> Option<f64>`
-- `make_blurb(day, pack_q, factors, p) -> String`
-- `wet_period_blurb(day) -> String` - names dominant rain period (morning/afternoon/evening)
+- `make_tags(day, pack_q, factors, p) -> Vec<BlurbTag>` - surface + rain tags for non-drainage models
+- `surface_tag(p, pack_q, factors) -> Option<BlurbTag>` - short surface keyword ("firm", "fast", "soft", "drying", ...)
+- `ride_rain_tag(day) -> Option<BlurbTag>` - "rain am" when meaningful ride-window rain
+- `build_drainage_tags(status, day, p) -> Vec<BlurbTag>` - Markham advisory tag only when `ClosureStatus::Possible`; clear days emit nothing (status is unverified, day card links to Facebook)
+- `wet_period_tag(day) -> BlurbTag` - "rain am"/"rain pm"/"rainy" from dominant 3h rain period
+- `wet_label_tag(label) -> BlurbTag` - "wet am"/"wet pm"/"wet" for MixedSurface trails
 - `trap_score(x, a, b, c, d) -> f64` - trapezoid membership function
 - `lerp(a, b, t) -> f64`
 
-**Tests include:** `post_rain_dry_day_scores_high`, `long_dry_spell_scores_low_pack`, `ride_window_rain_penalized`, `afternoon_rain_tolerated`, `overnight_rain_does_not_penalize_the_ride_window`, `light_ride_window_rain_is_tolerated_on_packed_sand`, `cloudy_slows_drying_vs_sunny`, `dead_calm_dings_wind`, `markham_moderate_overnight_rain_reopens_around_midday`, `markham_heavy_pm_rain_carries_into_next_morning`, `markham_warns_about_future_pm_rain_without_tanking_morning`, `markham_afternoon_rain_open_am`, `markham_combines_rain_across_midnight`, `markham_ignores_short_showers`, `markham_trailing_trace_does_not_extend_closure`, `quiet_waters_keeps_a_higher_dry_surface_baseline`, `stars_mapping_boundaries`, `wet_blurb_names_the_dominant_period`, `good_outlier_detected_when_cooler_than_trend`, `warm_morning_records_positive_am_delta`, `warm_afternoon_records_positive_pm_delta`, `no_outlier_when_within_trend`, `outlier_needs_trailing_data`
+**Tests include:** `post_rain_dry_day_scores_high`, `long_dry_spell_scores_low_pack`, `ride_window_rain_penalized`, `afternoon_rain_tolerated`, `overnight_rain_does_not_penalize_the_ride_window`, `light_ride_window_rain_is_tolerated_on_packed_sand`, `cloudy_slows_drying_vs_sunny`, `dead_calm_dings_wind`, `markham_moderate_overnight_rain_reopens_around_midday`, `markham_heavy_pm_rain_carries_into_next_morning`, `markham_warns_about_future_pm_rain_without_tanking_morning`, `markham_afternoon_rain_open_am`, `markham_combines_rain_across_midnight`, `markham_ignores_short_showers`, `markham_trailing_trace_does_not_extend_closure`, `quiet_waters_keeps_a_higher_dry_surface_baseline`, `stars_mapping_boundaries`, `wet_blurb_names_a_single_wet_half`, `tags_carry_expected_tone`, `good_outlier_detected_when_cooler_than_trend`, `warm_morning_records_positive_am_delta`, `warm_afternoon_records_positive_pm_delta`, `no_outlier_when_within_trend`, `outlier_needs_trailing_data`
 
 ## src/weather/
 
