@@ -143,6 +143,52 @@ body {
   padding: 1.25rem 1rem 3rem;
 }
 
+/* Hover tooltips. Desktop only: hidden on coarse pointers. */
+[data-tip] {
+  position: relative;
+}
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 16rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
+}
+
+/* The hero and model toggle clip their edges, so hovered controls show the
+   tip below the button instead of above it. */
+.hero [data-tip]::after {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+@media (hover: none) {
+  [data-tip]::after {
+    display: none;
+  }
+}
+
 /* Header: trail mark left, all copy right-aligned */
 .header {
   display: flex;
@@ -693,9 +739,16 @@ body {
   height: var(--control-h);
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
   background: color-mix(in srgb, var(--bg) 40%, transparent);
   box-sizing: border-box;
+}
+
+.hero-toggle .model-btn:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.hero-toggle .model-btn:last-child {
+  border-radius: 0 8px 8px 0;
 }
 
 .hero-toggle .model-btn {
@@ -1462,7 +1515,6 @@ body {
   border-radius: var(--radius);
   background: var(--bg-elev);
   box-shadow: var(--shadow);
-  overflow: hidden;
 }
 
 .weekend-day-card.today {
@@ -1476,6 +1528,7 @@ body {
   padding: 0.5rem 0.85rem;
   background: color-mix(in srgb, var(--jay) 8%, var(--bg-elev));
   border-bottom: 1px solid var(--border);
+  border-radius: inherit;
 }
 
 .weekend-day-card.today .weekend-day-head {
@@ -1529,6 +1582,8 @@ body {
 
 .weekend-trail-row:last-child {
   border-bottom: none;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
 }
 
 .weekend-trail-row:hover {

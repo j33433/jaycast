@@ -359,7 +359,6 @@ pub fn App() -> impl IntoView {
                     type="button"
                     class="logo-change"
                     aria-label="Change trail location"
-                    title="Change trail location"
                     on:click=move |_| location_dialog_open.set(true)
                 >
                     <img
@@ -382,6 +381,7 @@ pub fn App() -> impl IntoView {
                         <button
                             type="button"
                             class="location-change"
+                            data-tip="Open the trail chooser"
                             on:click=move |_| location_dialog_open.set(true)
                         >
                             "change location"
@@ -390,6 +390,7 @@ pub fn App() -> impl IntoView {
                         <button
                             type="button"
                             class="help-open"
+                            data-tip="How to read a day card"
                             on:click=move |_| help_dialog_open.set(true)
                         >
                             "help"
@@ -965,6 +966,7 @@ fn Hero(
                                         "model-btn"
                                     }
                                 }
+                                data-tip="European forecast model"
                                 on:click=move |_| on_switch.run(WeatherModel::Ecmwf)
                             >
                                 "ECMWF"
@@ -978,6 +980,7 @@ fn Hero(
                                         "model-btn"
                                     }
                                 }
+                                data-tip="US forecast model (HRRR + GFS)"
                                 on:click=move |_| on_switch.run(WeatherModel::GfsSeamless)
                             >
                                 "GFS"
@@ -994,11 +997,11 @@ fn Hero(
                                         "Switch to dark theme"
                                     }
                                 }
-                                title=move || {
+                                data-tip=move || {
                                     if theme.get() == Theme::Dark {
-                                        "Light theme"
+                                        "Switch to light theme"
                                     } else {
-                                        "Dark theme"
+                                        "Switch to dark theme"
                                     }
                                 }
                                 on:click=move |_| {
@@ -1048,7 +1051,7 @@ fn Hero(
                                     }
                                 }
                                 aria-label="Weekend warrior comparison grid"
-                                title="Compare all trails"
+                                data-tip="Compare all three parks side by side"
                                 on:click=move |_| on_toggle_weekend.run(())
                             >
                                 <svg class="weekend-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1120,6 +1123,7 @@ fn TimelineNav(
             <button
                 type="button"
                 class="nav-btn"
+                data-tip="Older days"
                 prop:disabled=move || { view_start.get() == 0 }
                 on:click=move |_| {
                     let s = view_start.get();
@@ -1133,6 +1137,7 @@ fn TimelineNav(
                 <button
                     type="button"
                     class="nav-today"
+                    data-tip="Jump to today"
                     on:click=move |_| {
                         view_start.set(today_idx.saturating_sub(1).min(max_start));
                         if let Some(d) = days.get(today_idx) {
@@ -1146,6 +1151,7 @@ fn TimelineNav(
             <button
                 type="button"
                 class="nav-btn"
+                data-tip="Newer days"
                 prop:disabled=move || { view_start.get() >= max_start }
                 on:click=move |_| {
                     let s = view_start.get();
@@ -1505,6 +1511,7 @@ fn WeekendGrid(
                         if is_best { c.push_str(" best-bet"); }
                         c
                     }
+                    data-tip=format!("Open {} for {}", t.short_name(), format_short(date))
                     on:click=move |_| on_select_day.run((*t, date))
                 >
                     <div class="weekend-trail-row-main">
