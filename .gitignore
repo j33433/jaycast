@@ -7,5 +7,6 @@ SIMPLEENGLISH.md
 .DS_Store
 *.swp
 install.sh
+beta-install.sh
 fetch-weather.sh
 .jaycast-xweather-cache.json
