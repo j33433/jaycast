@@ -4,6 +4,7 @@ Most recent first.
 
 | Date | Revisions | Summary |
 | --- | --- | --- |
+| 2026-08-02 | (uncommitted) | Per-trail favicon and home-screen icon swap; small 128px WebP icons for the location chooser and weekend grid; trail logos switch from SVG to WebP (1024px, q95). Same sharpness at every size, roughly 30% smaller on disk |
 | 2026-08-02 | [6144de5](https://github.com/j33433/jaycast/commit/6144de5) | Day-card blurbs become short keyword lists ("firm, rain am", "cool"); Markham shows no "open" tag since status is unverified (see Facebook link instead) |
 | 2026-08-01 | [5705672..fdd29ec](https://github.com/j33433/jaycast/compare/5705672...fdd29ec) | Add .gitignore and doc cleanup; UI copy simplified per Simple English; hero toggles stack on narrow views without dead space |
 | 2026-07-31 | [03aaec7..b26a1f2](https://github.com/j33433/jaycast/compare/03aaec7...b26a1f2) | Static about page + trail SEO data; forecast trimmed to today +5 days; Quiet Waters mud window shortened to 10h; rescan avoids colocated PWS pairs |

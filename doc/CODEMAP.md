@@ -23,11 +23,17 @@ jaycast/
   assets/
     style.css
     jaycast-icon.png
+    favicon-jaycast.png
+    favicon-gatorcast.png
+    favicon-eaglecast.png
   art/
     jaycast-detailed.svg
-    jaycast-plain.svg
-    gatorcast-plain.svg
-    eaglecast-plain.svg
+    jaycast-plain.webp
+    gatorcast-plain.webp
+    eaglecast-plain.webp
+    jaycast-small.webp
+    gatorcast-small.webp
+    eaglecast-small.webp
   src/
     lib.rs
     app.rs
@@ -76,16 +82,22 @@ jaycast/
 | File | Description |
 |------|-------------|
 | `style.css` | Application stylesheet. Florida scrub palette with dark (default) and light themes. CSS custom properties for jay blue, scrub green, sand, accent, warn, bad, star, rain. Styles for header, trail logo, location chooser dialog, help dialog (annotated demo day card with thought bubbles), hero, model toggle, theme toggle, weekend-warrior toggle, timeline nav, day cards (score-tinted gradients, AM/PM temp side borders, weekend/best/selected/past/today states), rain-wave and cloud-wave SVG backgrounds, detail panel with factor bars, vertical weekend comparison grid (day cards with trail rows, Best badge), footer, skeleton shimmer loader. Responsive breakpoint at 30rem. |
-| `jaycast-icon.png` | App icon / favicon / OG image. Referenced by `index.html` and `README.md`. |
+| `jaycast-icon.png` | Brand app icon. Static `og:image` / `twitter:image` and about-page icon. Referenced by `index.html`, `about/index.html`, and `README.md`. Not swapped per trail. |
+| `favicon-jaycast.png` | Camp Murphy favicon / apple-touch-icon (180px PNG). Copied to dist, used as `/jaycast/favicon-jaycast.png`. |
+| `favicon-gatorcast.png` | Markham favicon / apple-touch-icon (180px PNG). Copied to dist. |
+| `favicon-eaglecast.png` | Quiet Waters favicon / apple-touch-icon (180px PNG). Copied to dist. |
 
 ## art/
 
 | File | Description |
 |------|-------------|
 | `jaycast-detailed.svg` | Source artwork: detailed Camp Murphy scrub-jay logo (2048x2048, 62 linear gradients). Not deployed directly. |
-| `jaycast-plain.svg` | Camp Murphy trail mark. Copied to dist, used as `/jaycast/jaycast-plain.svg`. |
-| `gatorcast-plain.svg` | Markham trail mark (alligator). Copied to dist, used as `/jaycast/gatorcast-plain.svg`. |
-| `eaglecast-plain.svg` | Quiet Waters trail mark (eagle). Copied to dist, used as `/jaycast/eaglecast-plain.svg`. |
+| `jaycast-plain.webp` | Camp Murphy trail mark (1024px WebP, rasterized from the plain SVG). Copied to dist, used as `/jaycast/jaycast-plain.webp`. |
+| `gatorcast-plain.webp` | Markham trail mark (alligator). Copied to dist, used as `/jaycast/gatorcast-plain.webp`. |
+| `eaglecast-plain.webp` | Quiet Waters trail mark (eagle). Copied to dist, used as `/jaycast/eaglecast-plain.webp`. |
+| `jaycast-small.webp` | Camp Murphy small trail mark (128px WebP). Used in the location chooser and weekend grid. |
+| `gatorcast-small.webp` | Markham small trail mark (128px WebP). Used in the location chooser and weekend grid. |
+| `eaglecast-small.webp` | Quiet Waters small trail mark (128px WebP). Used in the location chooser and weekend grid. |
 
 ## src/
 
@@ -108,7 +120,7 @@ Leptos UI component tree. All components and helpers are private.
 - `struct WeekendGridData { dates, map, best_per_day }` - pure data prep for the multi-trail comparison grid. `build(all, today)` indexes scored days by trail/date and picks Best per day
 
 **Components:**
-- `App()` - root. Manages state signals (load state, selected day, view start, refreshed_at, model, trail, location/help dialogs, grid coords, theme, gauge_rain, first load, weekend_warrior, multi_days, multi_loading). Runs single-trail fetch+score effect + 15-min auto-refresh loop (timeline only. Grid is refreshed on toggle/model switch). `load_weekend` fetches history+forecast+gauge for all three trails. Trail switch exits weekend view. Model switch refreshes grid when open
+- `App()` - root. Manages state signals (load state, selected day, view start, refreshed_at, model, trail, location/help dialogs, grid coords, theme, gauge_rain, first load, weekend_warrior, multi_days, multi_loading). Runs single-trail fetch+score effect + 15-min auto-refresh loop (timeline only. Grid is refreshed on toggle/model switch). `load_weekend` fetches history+forecast+gauge for all three trails. Trail switch exits weekend view. Model switch refreshes grid when open. Effect swaps document title + favicon/apple-touch icon per trail
 - `LocationDialog(open, selected, on_change)` - modal trail chooser
 - `HelpDialog(open)` - modal guide: short site explainer + static annotated day card (clouds, model rain, gauge rain, now marker, score, detail) with thought-bubble callouts
 - `LoadingView()` - skeleton loading state
@@ -123,6 +135,7 @@ Leptos UI component tree. All components and helpers are private.
 **Helper functions:**
 - `load_selected_pref(trail) / save_selected_pref(trail, date)` - per-trail expanded day card in localStorage
 - `load_weekend_pref() / save_weekend_pref(active)` - weekend grid toggle in localStorage (`jaycast:weekend-warrior`)
+- `set_favicons(doc, trail)` - recreates the favicon + apple-touch-icon `<link>` elements for the trail (recreate, not href-mutate, to beat browser favicon caching)
 - `day_detail_view(d)` - detail panel with factor breakdown bars
 - `stars_str(n) -> String`
 - `score_style(score) -> String`
@@ -172,7 +185,9 @@ Trail definitions and localStorage/URL persistence.
 - `pub fn location(self) -> &'static str` - park name and state
 - `pub fn latitude(self) -> f64`
 - `pub fn longitude(self) -> f64`
-- `pub fn icon_src(self) -> &'static str` - SVG path
+- `pub fn icon_src(self) -> &'static str` - full-size WebP path
+- `pub fn icon_small_src(self) -> &'static str` - 128px WebP for location chooser and weekend grid
+- `pub fn favicon_src(self) -> &'static str` - 180px PNG favicon / apple-touch-icon
 - `pub fn short_name(self) -> &'static str`
 - `pub fn tagline(self) -> &'static str` - `"scrub trail pack"` / `"drainage advisory"` / `"mixed-surface forecast"`
 - `pub fn brand(self) -> &'static str` - `"jay"` / `"gator"` / `"eagle"`

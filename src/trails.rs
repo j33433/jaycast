@@ -64,9 +64,25 @@ impl Trail {
 
     pub fn icon_src(self) -> &'static str {
         match self {
-            Self::CampMurphy => "/jaycast/jaycast-plain.svg",
-            Self::Markham => "/jaycast/gatorcast-plain.svg",
-            Self::QuietWaters => "/jaycast/eaglecast-plain.svg",
+            Self::CampMurphy => "/jaycast/jaycast-plain.webp",
+            Self::Markham => "/jaycast/gatorcast-plain.webp",
+            Self::QuietWaters => "/jaycast/eaglecast-plain.webp",
+        }
+    }
+
+    pub fn icon_small_src(self) -> &'static str {
+        match self {
+            Self::CampMurphy => "/jaycast/jaycast-small.webp",
+            Self::Markham => "/jaycast/gatorcast-small.webp",
+            Self::QuietWaters => "/jaycast/eaglecast-small.webp",
+        }
+    }
+
+    pub fn favicon_src(self) -> &'static str {
+        match self {
+            Self::CampMurphy => "/jaycast/favicon-jaycast.png",
+            Self::Markham => "/jaycast/favicon-gatorcast.png",
+            Self::QuietWaters => "/jaycast/favicon-eaglecast.png",
         }
     }
 

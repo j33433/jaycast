@@ -56,6 +56,33 @@ fn save_weekend_pref(active: bool) {
     }
 }
 
+fn set_favicons(doc: &web_sys::Document, trail: Trail) {
+    let favicon = trail.favicon_src();
+    // Recreate the link elements instead of mutating href in place: browsers
+    // cache favicons aggressively and may not refetch on a same-element change.
+    for id in ["jaycast-favicon", "jaycast-apple-icon"] {
+        if let Some(old) = doc.get_element_by_id(id) {
+            let _ = old.remove();
+        }
+    }
+    if let Some(head) = doc.head() {
+        if let Ok(icon) = doc.create_element("link") {
+            let _ = icon.set_attribute("id", "jaycast-favicon");
+            let _ = icon.set_attribute("rel", "icon");
+            let _ = icon.set_attribute("type", "image/png");
+            let _ = icon.set_attribute("href", favicon);
+            let _ = head.append_child(&icon);
+        }
+        if let Ok(icon) = doc.create_element("link") {
+            let _ = icon.set_attribute("id", "jaycast-apple-icon");
+            let _ = icon.set_attribute("rel", "apple-touch-icon");
+            let _ = icon.set_attribute("sizes", "180x180");
+            let _ = icon.set_attribute("href", favicon);
+            let _ = head.append_child(&icon);
+        }
+    }
+}
+
 fn url_has_screenshot_flag() -> bool {
     window()
         .and_then(|w| w.location().search().ok())
@@ -100,6 +127,7 @@ pub fn App() -> impl IntoView {
         let t = trail.get();
         if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
             doc.set_title(&format!("{}cast · {} trail forecast", t.brand(), t.short_name()));
+            set_favicons(&doc, t);
         }
     });
 
@@ -482,7 +510,7 @@ fn LocationDialog(
                             {Trail::ALL.into_iter().map(|trail| {
                                 let name = trail.name();
                                 let location = trail.location();
-                                let icon_src = trail.icon_src();
+                                let icon_src = trail.icon_small_src();
                                 // This dialog closes when a trail is chosen, so the class
                                 // must not subscribe to `selected`: a queued class update
                                 // could otherwise outlive the dialog's reactive owner.
@@ -1480,7 +1508,7 @@ fn WeekendGrid(
                     on:click=move |_| on_select_day.run((*t, date))
                 >
                     <div class="weekend-trail-row-main">
-                        <img class="weekend-trail-icon" src=t.icon_src() alt=""/>
+                        <img class="weekend-trail-icon" src=t.icon_small_src() alt=""/>
                         <span class="weekend-trail-name">{t.short_name()}</span>
                     </div>
                     {match cell {
