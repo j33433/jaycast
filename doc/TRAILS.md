@@ -16,11 +16,12 @@ to speak of. This is Florida sugar sand over limestone.
 Camp Murphy rides best after meaningful rain but before the sun bakes it back to
 powder. The model scores this with **SandPack**:
 
-- More rain generally improves the pack. Very heavy recent totals can still leave
-  the surface soft or puddled.
+- More rain generally improves the pack, and once the sand is wet extra rain no
+  longer helps or hurts. The amount saturates. Heavy rain only puddles, and
+  this coarse sand drains it fast, so high recent totals never read as soft.
 - The timing peak is at 18 hours after rain ends with a linear fade to soft
-  over roughly 3 days. The overall pack quality multiplies rain amount by timing,
-  so old rain contributes less even when totals look good.
+  over roughly 3 days. The overall pack quality multiplies the rain amount
+  (saturated) by timing, so old rain contributes less even when totals look good.
 - Sun dries this lightly canopied sand aggressively, so the ET0 (sunshine) forecast
   modulates the drying clock. Cloudy days keep the sand packed longer.
 - A long dry spell (7+ days with no significant rain) bottoms out the pack score

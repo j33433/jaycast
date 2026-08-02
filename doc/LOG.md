@@ -4,6 +4,7 @@ Most recent first.
 
 | Date | Revisions | Summary |
 | --- | --- | --- |
+| 2026-08-02 | (uncommitted) | Camp Murphy rain amount saturates: heavy recent totals no longer read as "soft" or "hold water". Sugar sand packs from rain and drains fast; timing and ride-window wetness handle standing water. Fixes the day card contradicting its own details ("soft" blurb vs "best trail conditions") and removes the now-unused 3 in 48h cap |
 | 2026-08-02 | (uncommitted) | Hover tooltips on hero toggles, header buttons, timeline nav, and weekend grid rows. Styled CSS data-tip tips, themed, desktop only. Native title attributes replaced |
 | 2026-08-02 | [43208b4](https://github.com/j33433/jaycast/commit/43208b4) | Screenshot capture folded into one script: --local serves the local dist/ build, --mobile keeps the 390x844 capture. Deletes scripts/screenshot.mjs. beta-install.sh ignored in git |
 | 2026-08-02 | [0d105bd](https://github.com/j33433/jaycast/commit/0d105bd) | leptos 0.7.8 -> 0.8.20 (tachys 0.2.18); fixes the "closure invoked recursively or after being dropped" dialog bug. App resources switched to relative paths so one build serves any base path. Folds LEPTOSUPDATE.md into CODEMAP |

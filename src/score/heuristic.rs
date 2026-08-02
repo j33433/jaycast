@@ -347,17 +347,22 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
     let effective_hours = hours_since.map(|h| h * dry_factor);
 
     // Antecedent rain amount score.
-    // SandPack: triangle around ideal — rain packs loose sand; dry = soft.
+    // SandPack: rain packs loose sand; dry = soft. Once there is enough rain the
+    // amount saturates, so more rain never hurts. Excess water only puddles and
+    // drains fast on this coarse sand; recency is handled by timing and the
+    // ride-window wet penalty.
     // MixedSurface: hardpack stays firm when dry; rain only temporarily degrades.
     let amount_q = if p.model == RideabilityModel::MixedSurface {
         (0.90 - (antecedent / p.max_useful_rain_in) * 0.60).clamp(0.30, 0.90)
+    } else if antecedent >= p.min_useful_rain_in {
+        1.0
+    } else if antecedent <= p.min_useful_rain_in * 0.5 {
+        0.0
     } else {
-        trap_score(
-            antecedent,
-            p.min_useful_rain_in * 0.5,
-            p.min_useful_rain_in,
-            p.ideal_antecedent_in,
-            p.max_useful_rain_in,
+        lerp(
+            0.0,
+            1.0,
+            (antecedent - p.min_useful_rain_in * 0.5) / (p.min_useful_rain_in * 0.5),
         )
     };
 
@@ -453,12 +458,10 @@ fn pack_quality(days: &[DayWeather], idx: usize, p: &Params) -> (f64, Vec<Factor
 
     let amount_note = if antecedent >= p.significant_rain_in && antecedent < p.min_useful_rain_in {
         "some recent rain".into()
-    } else if antecedent > p.max_useful_rain_in {
-        if p.model == RideabilityModel::MixedSurface {
-            format!("{antecedent:.2} in of recent rain, can stay wet briefly")
-        } else {
-            format!("{antecedent:.2} in of recent rain, can stay soft or hold water")
-        }
+    } else if antecedent > p.max_useful_rain_in
+        && p.model == RideabilityModel::MixedSurface
+    {
+        format!("{antecedent:.2} in of recent rain, can stay wet briefly")
     } else {
         format!(
             "{antecedent:.2} in of rain in the last {:.0} hours",
@@ -1162,20 +1165,6 @@ fn wet_label_from_3h(buckets: &[f64; 8]) -> String {
     }
 }
 
-fn trap_score(x: f64, a: f64, b: f64, c: f64, d: f64) -> f64 {
-    // Trapezoid membership: 0 outside [a,d], ramp a→b, 1 on [b,c], ramp c→d.
-    if x <= a || x >= d {
-        return 0.0;
-    }
-    if x >= b && x <= c {
-        return 1.0;
-    }
-    if x < b {
-        return ((x - a) / (b - a)).clamp(0.0, 1.0);
-    }
-    ((d - x) / (d - c)).clamp(0.0, 1.0)
-}
-
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
@@ -1417,6 +1406,53 @@ mod tests {
             f.blurb.contains("firm"),
             "fresh rain should produce firm sand, got '{}'",
             f.blurb,
+        );
+    }
+
+    #[test]
+    fn heavy_recent_rain_keeps_sand_firm() {
+        // Two heavy storm days (3.5" in 48h) then a dry ride day, rain ended
+        // ~24h before the morning. Sugar sand packs, it does not turn soft from
+        // too much water, so the surface should still read firm and the Recent
+        // rain note must not claim it holds water.
+        let mut d1 = day("2026-07-01", 1.5, 88.0);
+        d1.precip_pm_in = 1.5;
+        let mut d2 = day("2026-07-02", 2.0, 86.0);
+        d2.precip_pm_in = 2.0;
+        let d3 = day("2026-07-03", 0.0, 84.0);
+        let today = NaiveDate::from_ymd_opt(2026, 7, 3).unwrap();
+        let scored = score_days(&[d1, d2, d3], today, &Params::default());
+        let d = scored.iter().find(|x| x.date == today).unwrap();
+        assert!(
+            d.stars >= 4.0,
+            "heavy recent rain should keep sand packed: {:.1} stars (score {:.2})",
+            d.stars,
+            d.score,
+        );
+        assert!(
+            d.blurb.contains("firm"),
+            "heavy recent rain should read firm, got '{}'",
+            d.blurb,
+        );
+        assert!(
+            !d.blurb.contains("soft"),
+            "heavy recent rain should not read soft, got '{}'",
+            d.blurb,
+        );
+        let amount = d
+            .factors
+            .iter()
+            .find(|f| f.name == "Recent rain")
+            .unwrap();
+        assert!(
+            !amount.note.contains("hold water"),
+            "Recent rain note should not claim puddles, got '{}'",
+            amount.note,
+        );
+        assert!(
+            amount.note.contains("last 48 hours"),
+            "Recent rain note should state the total window, got '{}'",
+            amount.note,
         );
     }
 

@@ -15,11 +15,10 @@ pub struct Params {
     pub model: RideabilityModel,
     /// Significant rain event threshold (inches/day).
     pub significant_rain_in: f64,
-    /// Ideal antecedent rain sum over the pack window (inches).
-    pub ideal_antecedent_in: f64,
-    /// Soft floor: below this antecedent total, sand stays loose.
+    /// Soft floor: below this antecedent total, sand stays loose. Above it,
+    /// SandPack amount saturates (more rain never hurts).
     pub min_useful_rain_in: f64,
-    /// Too much recent rain (before ride day) starts to hurt.
+    /// MixedSurface-only: antecedent above this degrades the hardpack surface.
     pub max_useful_rain_in: f64,
     /// Hours before ride day that count toward packing (lookback).
     pub pack_lookback_hours: f64,
@@ -74,7 +73,6 @@ impl Default for Params {
         Self {
             model: RideabilityModel::SandPack,
             significant_rain_in: 0.25,
-            ideal_antecedent_in: 1.0,
             min_useful_rain_in: 0.35,
             max_useful_rain_in: 3.0,
             pack_lookback_hours: 48.0,
@@ -126,7 +124,6 @@ impl Params {
             Trail::QuietWaters => {
                 params.model = RideabilityModel::MixedSurface;
                 params.min_useful_rain_in = 0.55;
-                params.ideal_antecedent_in = 1.25;
                 params.max_useful_rain_in = 4.0;
                 params.pack_lookback_hours = 72.0;
                 params.ideal_hours_since_rain = 30.0;
