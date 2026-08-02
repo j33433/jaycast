@@ -11,7 +11,7 @@ repository = "https://github.com/j33433/jaycast"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-leptos = { version = "0.7", features = ["csr"] }
+leptos = { version = "0.8.20", features = ["csr"] }
 gloo-net = { version = "0.6", features = ["http"] }
 gloo-timers = { version = "0.3", features = ["futures"] }
 serde = { version = "1", features = ["derive"] }

@@ -63,10 +63,10 @@ jaycast/
 
 | File | Description |
 |------|-------------|
-| `Cargo.toml` | Package manifest. Crate types `cdylib` + `rlib`. Deps: leptos 0.7 (csr), gloo-net, serde, serde_json, chrono, wasm-bindgen, web-sys, console_error_panic_hook. Native-only: ureq. Feature `cli` gates the binary (analyze, backtest, xweather). Release profile: `opt-level="z"`, lto, single codegen unit. |
+| `Cargo.toml` | Package manifest. Crate types `cdylib` + `rlib`. Deps: leptos 0.8.20 (csr, tachys 0.2), gloo-net, serde, serde_json, chrono, wasm-bindgen, web-sys, console_error_panic_hook. Native-only: ureq. Feature `cli` gates the binary (analyze, backtest, xweather). Release profile: `opt-level="z"`, lto, single codegen unit. |
 | `Cargo.lock` | Dependency lockfile (auto-generated). |
 | `LICENSE` | GPL-3.0-or-later. |
-| `Trunk.toml` | Trunk build config. Target `index.html`, dist dir `dist/`, public URL `/jaycast/`. |
+| `Trunk.toml` | Trunk build config. Target `index.html`, dist dir `dist/`, relative public URL (`./`) so one build serves any base path. |
 | `index.html` | App entry HTML. Inline JS applies saved theme before render. OpenGraph/Twitter meta, JSON-LD structured data (WebApplication + three SportsActivityLocation/Place). Trunk asset links for icon, CSS, WASM, and copy-file/copy-dir directives for SVGs, LICENSE, robots.txt, sitemap.xml, and the `about/` page. |
 | `robots.txt` | Allows `/jaycast/`, declares sitemap URL. |
 | `sitemap.xml` | URLs: home (daily) and the about page (monthly). |
@@ -76,6 +76,15 @@ jaycast/
 | `doc/CODEMAP.md` | This file. It is the file-level map of the project. |
 | `doc/TRAILS.md` | Per-trail surface character, rain response, score weights, gauge stations. |
 | `doc/XWEATHER.md` | Xweather auth, station map, QC rules, feed CLI reference. |
+
+### Leptos version
+
+leptos is pinned to 0.8.20 (tachys 0.2.18). Floor is 0.8.10: tachys 0.1.x
+dropped DOM event listeners when dialogs were torn down, throwing "closure
+invoked recursively or after being dropped" in the console (leptos#4314).
+tachys 0.2.8 (leptos 0.8.9) regressed the same bug (leptos#4350); the fix
+landed in tachys 0.2.9+. App resources use relative paths so a single build
+serves the live site and any preview path such as `/jaycast/beta/`.
 
 ## assets/
 
