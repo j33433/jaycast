@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::trails::Trail;
 use crate::weather::DayWeather;
 
-const FEED_URL: &str = "/jaycast/rain.json";
+const FEED_URL: &str = "./rain.json";
 
 /// Replace model precip with gauge tips for completed hours, then recompute
 /// daily/window totals. No-op when the feed is unusable for `trail`.
@@ -123,7 +123,7 @@ struct DayBlock {
     stale: bool,
 }
 
-/// Fetch `/jaycast/rain.json`. Missing or invalid feed yields empty gauge data.
+/// Fetch `./rain.json`. Missing or invalid feed yields empty gauge data.
 pub async fn fetch_gauge_rain(today: NaiveDate) -> GaugeRain {
     match fetch_inner(today).await {
         Ok(g) => g,

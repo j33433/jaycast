@@ -1,7 +1,7 @@
 [build]
 target = "index.html"
 dist = "dist"
-public_url = "/jaycast/"
+public_url = "./"
 
 [watch]
 ignore = ["dist"]
