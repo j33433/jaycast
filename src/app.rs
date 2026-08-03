@@ -1123,7 +1123,6 @@ fn TimelineNav(
             <button
                 type="button"
                 class="nav-btn"
-                data-tip="Older days"
                 prop:disabled=move || { view_start.get() == 0 }
                 on:click=move |_| {
                     let s = view_start.get();
@@ -1137,7 +1136,6 @@ fn TimelineNav(
                 <button
                     type="button"
                     class="nav-today"
-                    data-tip="Jump to today"
                     on:click=move |_| {
                         view_start.set(today_idx.saturating_sub(1).min(max_start));
                         if let Some(d) = days.get(today_idx) {
@@ -1151,7 +1149,6 @@ fn TimelineNav(
             <button
                 type="button"
                 class="nav-btn"
-                data-tip="Newer days"
                 prop:disabled=move || { view_start.get() >= max_start }
                 on:click=move |_| {
                     let s = view_start.get();
